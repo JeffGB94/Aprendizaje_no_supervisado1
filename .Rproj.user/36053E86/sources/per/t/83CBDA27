@@ -1,0 +1,28 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1605215027783.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1426509147",
+    "id" : "83CBDA27",
+    "lastKnownWriteTime" : 1605239913,
+    "last_content_update" : 1605239913502,
+    "path" : "C:/Users/PC/Google Drive/Universidad Nacional de Colombia/12. Doceavo semestre/Introducción a la Analítica/3. Modulo 3/Tarea_1/Tarea.Rmd",
+    "project_path" : "Tarea.Rmd",
+    "properties" : {
+        "cursorPosition" : "48,0",
+        "docOutlineVisible" : "0",
+        "last_setup_crc32" : "A61B5A4233d3d8a5",
+        "scrollLine" : "46",
+        "tempName" : "Untitled1"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

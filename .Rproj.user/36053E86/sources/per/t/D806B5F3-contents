@@ -1,0 +1,1572 @@
+---
+title: "Tarea 2"
+author:
+- "Camila Acosta Ramírez"
+- "Daniela Arbeláez Montoya"
+- "Jefferson Gamboa Betancur"
+- "Valentina Rengifo Muñoz"
+date: "30/10/2020"
+output: pdf_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T, message = F, warning = F, error = F, 
+                      out.width = '60%', fig.align = 'center', fig.pos= "h")
+```
+
+```{r echo =FALSE, message=FALSE, warning=FALSE}
+require(ISLR)
+require(pls)
+library(leaps)
+require(boot)
+```
+
+
+# 1. Actividad Clase 6
+
+Considere la base de datos **College** de la librería **ISLR**. Se busca predecir el número de solicitudes recibidas usando las demás variables del conjunto de datos. Escriba **?College** para obtener más información.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+College<- na.omit(College)
+```
+
+## Solución.
+
+## a.  
+
+Particione los datos en un conjunto de entrenamiento y otro de validación.
+```{r}
+set.seed(2567)
+sam <- sample(1:777, size = floor(nrow(College) * 0.7))
+train <- College[sam, ]; test <- College[-sam, ]
+```
+
+## b.  
+
+Ajuste un modelo PCR considerando los datos de entrenamiento con M (número de componentes principales) seleccionado a través de validación cruzada. ¿Cuál es el error de test obtenido para el M seleccionado?
+
+```{r}
+## Regresión con Componentes Principales
+pcr.fit<- pcr(Apps ~ ., data = train, scale = TRUE, validation = "CV")
+```
+```{r echo=FALSE}
+validationplot(pcr.fit, val.type = "MSEP")
+```
+
+Se observa que el MSE es mínimo cuando el modelo considera todas las covariables de la base de datos, es decir, M=17; sin embargo, para reducir el número de componentes, tomaremos M=9, ya que con esta cantidad se logra capturar 90.50\% de la variabilidad total y así se reduce el modelo casi a la mitad de las componentes.
+
+```{r}
+## MSE
+mean((predict(pcr.fit, test, ncomp = 9) - test$Apps)^2)
+```
+
+El error de test tomando 9 componentes es 1502960.
+
+## c.  
+
+Ajuste un modelo PLS considerando los datos de entrenamiento con M (número de componentes principales) seleccionado a través de validación cruzada. ¿Cuál es el error de test obtenido para el M seleccionado?
+
+```{r}
+# Mínimos cuadrados parciales
+pls.fit <- plsr(Apps ~ ., data = train, scale = TRUE, validation = "CV")
+```
+
+```{r echo=FALSE}
+validationplot(pls.fit, val.type = "RMSEP"); grid()
+```
+
+Se observa en el gráfico que el MSE se minimiza en 10 componentes y allí mismo se estabiliza.Con estas 10 componentes se logra capturar $84.13\%$ de la variabilidad total,aproximadamente un $6\%$ menos de la variabilidad que explicaba el método de componentes principales.
+
+```{r}
+mean((predict(pls.fit, test, ncomp = 10) - test$Apps)^2)
+```
+
+El error de test que se obtiene al seleccionar 10 componentes es de 1531328.
+
+## d.  
+
+De los dos métodos anteriormente expuestos, ¿cuál muestra mejores resultados?
+
+Teniendo en cuenta los errores de test calculados para cada uno de los métodos anteriores, se tiene que $MSE_{pcr}<MSE_{pls}$, por lo que el modelo expuesto en el literal $(b)$ muestra mejores resultados de ajuste para la base de datos $College$.
+
+# 2. Actividad Clase 7
+
+## Solución.
+
+## a.  
+
+Cargue la base de datos en R, guardela como .RData y luego carguela nuevamente. ¿Cuál fue la reducción en tamaño del archivo?
+
+```{r}
+datos <- read.csv("DATOS_C7.txt", header = T, sep = " ")
+save(datos, file = "Comprimido.RData")
+load(file = "Comprimido.RData")
+```
+
+Se alcanza casi un $48\%$ de reducción del tamaño del archivo. El tamaño inicial de la base de datos era 192.901 kilobytes y al momento de guardarla como .RData, el tamaño se disminuye a 91.854 kilobytes; además la rapidez de carga de la base aumenta considerablemente.
+
+## b.  
+Realice un análisis para seleccionar las variables más relevantes para explicar Y.
+
+```{r echo=FALSE}
+regfit.full <- regsubsets(Y ~ .,data = datos, nvmax = 10,method = "backward")
+reg.summary <- summary(regfit.full)
+```
+```{r echo=FALSE}
+par(mfrow = c(1, 2))
+plot(reg.summary$rss, type = "l", 
+     xlab = "Number of Variables", ylab = "RSS")
+plot(reg.summary$adjr2, type = "l",
+     xlab = "Number of Variables", ylab = " Adjusted RSq")
+```
+Con los gráficos se identifican 3 de 310 variables que son significativas para explicar Y.
+Los coeficientes de estas variables en el modelo son:
+
+```{r echo=FALSE}
+coef(regfit.full, 3)
+```
+Es decir que X31, X38 y X182 son las variables que mejor explican a Y.
+
+## c.  
+
+Grafique las variables más relevantes versus Y y ajuste un modelo. ¿El comportamiento Y es linear con todas las variables explicativas?
+
+```{r include=FALSE}
+panel.hist <- function(x, ...)
+{
+  usr <- par("usr"); on.exit(par(usr))
+  par(usr = c(usr[1:2], 0, 1.5) )
+  h <- hist(x, plot = FALSE)
+  breaks <- h$breaks; nB <- length(breaks)
+  y <- h$counts; y <- y/max(y)
+  rect(breaks[-nB], 0, breaks[-1], y, col="chartreuse4", ...)
+}
+
+panel.cor <- function(x, y, digits=2, prefix="", cex.cor)
+{
+  usr <- par("usr"); on.exit(par(usr))
+  par(usr = c(0, 1, 0, 1))
+  r <- abs(cor(x, y))
+  txt <- format(c(r, 0.123456789), digits=digits)[1]
+  txt <- paste(prefix, txt, sep="")
+  if(missing(cex.cor)) cex <- 0.8/strwidth(txt)
+  text(0.5, 0.5, txt, cex = cex * r)
+}
+```
+```{r include=FALSE}
+panel.reg <- function (x, y) 
+{
+  points(x, y, pch=20, col = "gray")
+  lines(smooth.spline(y ~ x, spar = 0.35), lwd=2, col='chartreuse4')
+}
+```
+
+```{r echo=FALSE}
+pairs(Y ~ X31 + X48 + X182, data = datos,
+      upper.panel = panel.reg,
+      diag.panel = panel.hist,
+      lower.panel = panel.cor)
+```
+Con este gráfico se observa que el comportamiento de Y con X31 y X182 no es lineal, por lo que es necesario hacer un ajuste polinomial.
+
+## d.  
+
+Ajuste un modelo polinómico y un modelo con funciones paso. Compare ambos modelos. ¿Cuál seleccionaría como el mejor modelo?
+
+Primero se particionan los datos en un conjunto de entrenamiento y otro de validación.
+
+```{r}
+set.seed(2567)
+muestra <- sample(1:nrow(datos), size = floor(nrow(datos) * 0.7))
+train <- datos[muestra, ]
+test <- datos[-muestra, ]
+```
+
+Para definir el grado del polinomio, se usará validación cruzada.
+
+```{r message=FALSE, include=FALSE}
+MSE <- vector()
+for(i in 1:10){
+  modi <- glm(Y~poly(X31,degree=i)+X48+poly(X182,degree=i), data=train)
+  crossv <- cv.glm(train, modi, K = 10); MSE[i] <- crossv$delta[1]
+}
+```
+```{r echo=FALSE}
+plot(1:10,MSE, type = "b", las=1,xlab = "Grados del polinomio",
+ylab = "MSE", main = "Polinomio para X31 y X182")
+```
+
+Con el gráfico se concluye que el mejor MSE se encontraría con un polinomio de grado 4 para X31 y X182. Por lo cual, el modelo se ajustaría así:
+
+```{r}
+mpoly<-glm(Y~poly(X31,degree = 4)+X48+poly(X182,degree = 4),data = train)
+```
+
+Al verificar el resumen de este modelo, se observa que el polinomio de grado 4 para la variable X182 no es significativo, así que se ajusta el modelo sin éste:
+
+```{r}
+mpoly<-glm(Y~poly(X31,degree = 4)+X48+poly(X182,degree = 3),data = train)
+```
+
+Verificando nuevamente el resumen de modelo se tiene una significancia alta para todas las variables, se estima el $MSE_{poly}$.
+
+```{r echo=FALSE}
+mean((test$Y - predict(mpoly, newdata = test))^2)
+```
+
+Para ajustar el modelo con funciones paso, usamos CV para seleccionar el número de puntos de corte que minimizan el MSE.
+
+```{r echo=FALSE}
+MSE <- vector()
+for(i in 2:10){
+  train$X31_cut <- cut(train$X31, breaks = i)
+  train$X48_cut <- cut(train$X48, breaks = i)
+  train$X182_cut <- cut(train$X182, breaks = i)
+  modi <- glm(Y ~ X31_cut + X48_cut + X182_cut,data=train)
+  crossv <- cv.glm(train, modi, K = 10); MSE[i] <- crossv$delta[1]
+}
+```
+```{r echo=FALSE}
+plot(2:10, MSE[-1], type = "o", pch = 20, col = "red",
+     xlab = "Puntos de Corte", ylab = "MSE")
+```
+
+Analizando la gráfica se percibe con claridad que el $MSE_{cut}$ sigue siendo alto aún con 10 puntos de corte, lo que indica que es necesario incrementar los puntos de corte para disminuir el error y se calcula el $MSE$.
+
+```{r}
+mcut<-glm(Y~X31_cut+X48_cut+X182_cut,data = train)
+```
+
+```{r echo=FALSE}
+ndat<-data.frame(X31_cut=cut(test$X31,breaks=10),X48_cut=cut(test$X48,breaks=10), 
+                 X182_cut=cut(test$X182,breaks=10))
+mean((test$Y-predict(mcut,newdata=ndat))^2)
+```
+
+Finalmente, como a las funciones paso se les complica seguir una tendencia polinomial, el error de prueba asociado es mayor respecto a las funciones polinómicas, ya que para esta ocasión, tienen mejor desempeño; por lo que sería el mejor modelo. 
+
+# 3.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+require(kableExtra)
+#Para hacer multiples gráficas con ggplot2, es una contraparte de par(mfrow =c())
+require(gridExtra)
+#Paquete para gráficos con ggplot2 
+require(ggplot2)
+#Paquete requerido, contra parte de la función pairs pero con ggplot2 (require de ggplot2)
+require(GGally)
+require(boot)
+require(splines)
+```
+
+
+Considere la base de datos **Credit** del paquete **ISLR.** Suponiendo que nuestra variable de interés es el **Balance**, realice la siguiente actividad:
+
+a. Realice gráficos que permitan ver las relaciones existentes entre todas las variables de la base de datos.
+
+b. Seleccione un conjunto de variables que considere útiles para modelar el **Balance**
+
+c. Por medio de análisis de varianza de modelos anidados, plantee al menos 4 modelos GAM.
+
+d. Usando CV, seleccione el mejor modelo entre los cuatro modelos planteados en el item anterior.
+
+## Solución.
+
+#### Descripción de Credit.
+
+*Credit* es un conjunto de datos simulados que contiene información sobre diez mil clientes. El objetivo aquí es predecir qué clientes incumplirán con la deuda de su tarjeta de crédito.
+
+**Lectura de la base Credit**
+
+```{r echo =FALSE, fig.align="center"}
+datos <- ISLR::Credit
+datos$Cards <- as.factor(datos$Cards)
+kable(
+  head(ISLR::Credit, 10),
+  align = "c",
+  booktabs = TRUE
+) %>% kable_styling(latex_options = "scale_down")
+```
+
+
+* *ID*: Identificación.
+
+* *Income*: Ingresos en $10,000 dólares.
+
+* *Limit*: Límite de crédito.
+
+* *Rating*: Calificación crediticia.
+
+* *Cards*: Número de tarjetas de crédito.
+
+* *Age*: Edad en años.
+
+* *Education*: Número de años de educación.
+
+* *Gender*: Un factor con niveles masculino y femenino.
+
+* *Student*: Un factor con niveles No y Sí que indica si el individuo era estudiante.
+
+* *Married*: Un factor con los niveles No y Sí que indica si el individuo estaba casado.
+
+* *Ethnicity*: Un factor con niveles afroamericanos, asiáticos y caucásicos que indican la etnia del individuo.
+
+* *Balance*: Saldo promedio de tarjeta de crédito en $\$$.
+
+## a.  
+En primer lugar se separará la base de datos en dos grupos, una entre variables cuantitativas y otras entre variables cualitativas, devido a que se espera encontrar en un gráfico de dispersión, para cada una de las variables cuantitativas, la relación o el comportamiento en entre pares de variables de esta forma:
+
+```{r echo = F}
+ggpairs(datos[,c(-1, -5, -8, -9, -10, -11)], upper = list(continuous = "cor", combo = "box_no_facet", na =
+    "na"),
+  lower = list(continuous = wrap("points", alpha = 0.3), combo = "facethist", na = "na"), diag = list( mapping = ggplot2::aes(fill=Income)))
+
+```
+
+Al considerar este primer gráfico de dispersión entre variables cuantitativas, se observa en primer lugar que hay una fuerte correlación entre las covariables **Limit** e **Income**, **Rating** e **Income**, **Rating** y **Limit**, **Balance** y **Income**, **Balance** y  **Limit**, **Balance** y  **Rating**, debido principalmente a que una variables puede ser explicada a través de la otra variable, es decir, su correlación es cercana a uno en valor absoluto, como se observa en el gráfico donde dice "*Corr*". Además la funcionalidad de agregarle una transparencia a los puntos, es para poder observar donde se encuentra la mayor concentración de los puntos, por ejemplo los gráficos generados por *Balance vs Age* se logra ver una grán concentración de observaciones cuando *Balance* toma valores pequeños, esto podría ser otro factor a tener en cuenta, debido a que lo esperado es encontrar una homogeneidad de observaciones en todo el plano, algo parecido a la relación que hay con *Education vs Age* o cuando haya una correlación directa o indirecta, se espere encontrar una mayor concentración de obsercaciones en el centro del gráfico, como sucede con *Balance vs Rating* o *Balance vs Limit*, o en su defecto una relación fuerte como sucede con *Rating vs Limit*. Con respecto a las demás relaciones, parecieran tener una homogeneidad en sus respectivos gráficos de dispersión.
+
+```{r echo = FALSE, fig.width = 7, fig.height=7, fig.asp=0.4, fig.align="center"}
+p1 <- ggplot(data=datos, aes(x = Income)) + geom_density()
+p2 <- ggplot(data=datos, aes(x = Limit)) + geom_density()
+p3 <- ggplot(data=datos, aes(x = Rating)) + geom_density()
+p4 <- ggplot(data=datos, aes(x = Age)) + geom_density()
+p5 <- ggplot(data=datos, aes(x = Education)) + geom_density()
+p6 <- ggplot(data=datos, aes(x = Balance)) + geom_density()
+
+#Require de gridExtra.
+grid.arrange(p1,p2,p3,p4,p5,p6, nrow = 2, ncol = 3)
+```
+
+Para contrastar con el gráfico de matriz de dispersión que se presentó anteriormente, hay dos modas que se observan para este gráfico de densidad con la variable *Age*, esto se podría explicar el echo de que podría haber un factor en la base *Credit* que logra  explicar este comportamiento, también hay que tener en cuenta que cuando se hizo el gráfico de *Balance vs Age* se detalló que para valores pequeños de *Balance* había una posible explicación a este suceso de igual forma con un estudio mucho más detallado para este caso, se podría encontrar el posible factor que divide *Age* en dos sub-grupos.
+
+Ahora se presentaran los gráficos de las variables cuantitativas contra cualitativas.
+
+Se plantea realizar gráficos de cajas y bigotes para ver si hay diferencias significativas en cada una de las categorías que cada variable presenta.
+
+### Income.
+
+```{r echo = F, fig.width = 7, fig.height=7, fig.asp=0.4 , fig.align="center"}
+ggplot(data = datos, aes(x = Cards, y = Income)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + geom_jitter(alpha = 0.5 ,aes(colour = Cards), width = 0.15) + ggtitle("Income vs Cards") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+En este caso, de *Income vs Cards* se detalla en primera instancia para cada grupo, un conjunto de observaciones o puntos de colores, los cuales representan la forma en que se distribuyen las observaciones a lo largo de cada categoría, y así apreciar si para cada caja y bigote su comparación frente a las otras es relevante debido a la cantidad de observaciones que se presentan para cada categoría. Además en un color rojo oscuro se aprecia la media para cada categoría. En negro transparente se presentan las observaciones extremas, son las que están por arriba o por abajo de $\frac{3}{2}$ del rango intercualtil (cuartil superior menos el cualtil inferior). Debido a esta representación, para las personas que tienen 7, 8 y 9 tarjetas de crédito, no simbolizan una comparación frente a las otras categorías de *Cards*, para ello, se requiere obtener más muestras y así realizar una mejor comparación de estas otras categorías. Si bien, teniendo esto presente las personas que poseen 5 tarjetas tienden a tener un ingreso mucho menor debido a que el $75\%$ de las personas tienen un ingreso de apróximadamente menor a 375000 dolares. En referencia a las otras categorías del número de tarjetas su comportamiento de los ingresos parecido.
+
+```{r echo = F, fig.width = 7, fig.height=7, fig.asp=0.4 , fig.align="center"}
+p1 <- ggplot(data = datos, aes(x = Gender, y = Income)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Income vs Gender") + theme(plot.title = element_text(hjust = 0.5))
+
+p2 <- ggplot(data = datos, aes(x = Student, y = Income)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Income vs Student") + theme(plot.title = element_text(hjust = 0.5))
+
+p3 <- ggplot(data = datos, aes(x = Married, y = Income)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Income vs Married") + theme(plot.title = element_text(hjust = 0.5))
+
+p4 <- ggplot(data = datos, aes(x = Ethnicity, y = Income)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Income vs Ethnicity") + theme(plot.title = element_text(hjust = 0.5))
+
+#Require de gridExtra.
+grid.arrange(p1,p2,p3,p4, nrow = 2, ncol = 2)
+```
+
+Para cada una de estas categorías de *Income vs Gender, vs Student, vs Married, vs Ethnicity* no se lograron encontrar diferencias significativas, es decir, que no importa el género, si estudió o no, si fue casado o no, o el tipo de etnia, sus ingresos serán apróximadamente iguales. Por presentación del mismo gráfico, se decidió no presentar la cantidad de observaciones para cada una de las categorías, debido a que para todas se presenta una cantidad sustancial que realmente representa cada uno de los boxplots. 
+
+### Limit.
+
+```{r echo = F, fig.width = 7, fig.height=7, fig.asp=0.4 , fig.align="center"}
+ggplot(data = datos, aes(x = Cards, y = Limit)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") +geom_jitter(alpha = 0.5 ,aes(colour = Cards), width = 0.15) + ggtitle("Limit vs Cards") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+Para el gráfico *Limit vs Cards* las personas que poseen 7, 8 y 9 tarjetas de crédito, no representan el boxplot debido a la poca cantidad de observaciones para la misma. Frente a las demás personas que poseen 1, 2, 3, 4, 5 y 6 tarjetas de crédito, no se observan diferencias significativas en el cupo o límite de la tarjeta de crédito, aunque pareciera que las personas que tienen 2 y 3 tarjetas, tieneden a tener un cupo de crédito mucho más variable en referencia a las demás personas que poseen otra cantidad de tarjetas de crédito.
+
+```{r echo = F, fig.width = 7, fig.height=7, fig.asp= 0.4 , fig.align="center"}
+p1 <- ggplot(data = datos, aes(x = Gender, y = Limit)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Limit vs Gender") + theme(plot.title = element_text(hjust = 0.5))
+
+p2 <- ggplot(data = datos, aes(x = Student, y = Limit)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Limit vs Student") + theme(plot.title = element_text(hjust = 0.5))
+
+p3 <- ggplot(data = datos, aes(x = Married, y = Limit)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Limit vs Married") + theme(plot.title = element_text(hjust = 0.5))
+
+p4 <- ggplot(data = datos, aes(x = Ethnicity, y = Limit)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Limit vs Ethnicity") + theme(plot.title = element_text(hjust = 0.5)) #+ theme( axis.text.x=element_blank(), axis.ticks.x=element_blank())
+
+#Require de gridExtra.
+grid.arrange(p1,p2,p3,p4, nrow = 2, ncol = 2)
+```
+
+En cuanto a los gráficos de *Limit vs Gender, vs Student, vs Married, vs Ethnicity* pareciera que el cupo o límite de crédito que se le otorga a cada grupo de personas, no difiere sustancialmente, es decir que el límite de crédito es apróximadamente igual para cada grupo de personas. Aunque, se presentan bastantes datos extremos para el límite de crédito cuando no fueron estudiantes y estuvieron casados.
+
+### Rating.
+
+```{r echo = F, fig.width = 7, fig.height = 7, fig.asp = 0.4 , fig.align = "center"}
+ggplot(data = datos, aes(x = Cards, y = Rating)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") +geom_jitter(alpha = 0.5 ,aes(colour = Cards), width = 0.15) + ggtitle("Rating vs Cards") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+Para las personas que tuvieron una calificación crediticia y obtuvieron 7, 8 0 9 tarjetas de crédito, su población no es significativa en referencia a los demás grupos, y además sus gráficos de caja y bigote no son representativos para estas muestras. En cuanto a las demás personas que obtuvieron una calificación créditicia y 1, 2, 3, 4, 5 y 6 tarjetas de crédito pareciera que su calificación es apróximadamente igual para todos, en parte se observa que ay una mayor variabilidad en la calificación para las personas que obtuvieron 2 y 3 tarjetas de crédito y para los que obtuvieron 4 tarjetas, hay tres observación atípicas para las cuales sería bueno saber qué pasó con estas calificaciones. 
+
+```{r echo = F, fig.width = 7, fig.height = 7, fig.asp = 0.4, fig.align="center"}
+p1 <- ggplot(data = datos, aes(x = Gender, y = Rating)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Rating vs Gender") + theme(plot.title = element_text(hjust = 0.5))
+
+p2 <- ggplot(data = datos, aes(x = Student, y = Rating)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Rating vs Student") + theme(plot.title = element_text(hjust = 0.5))
+
+p3 <- ggplot(data = datos, aes(x = Married, y = Rating)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Rating vs Married") + theme(plot.title = element_text(hjust = 0.5))
+
+p4 <- ggplot(data = datos, aes(x = Ethnicity, y = Rating)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Rating vs Ethnicity") + theme(plot.title = element_text(hjust = 0.5)) #+ theme( axis.text.x=element_blank(), axis.ticks.x=element_blank())
+
+#Require de gridExtra.
+grid.arrange(p1,p2,p3,p4, nrow = 2, ncol = 2)
+```
+
+En cuanto a los gráficos *Rating vs Gender, vs Student, vs Married, vs Ethnicity* no hay diferencias significativas, es decir que la calificación crediticia no difiere significativamente en si es hombre o mujer, estudiante o no, casado o no y tipo de etnia.
+
+### Age.
+
+```{r echo = F, fig.width = 7, fig.height=7, fig.asp=0.4 , fig.align="center"}
+ggplot(data = datos, aes(x = Cards, y = Age)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") +geom_jitter(alpha = 0.5 ,aes(colour = Cards), width = 0.15) + ggtitle("Age vs Cards") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+Esta muestras no es significativa para las personas que obtuvieron 7, 8 y 9 tarjetas de crédito, debido a que las edades que se encontraron para el manejo de esas cantidades de tarjetas no representan aún un diagráma de caja y bigotes. En cuanto para las otras personas, el rango de edades que obtienen un determinado número de tarjetas de crétido es bastante variable, siendo el grupo de edades más variable las que se les otorga 4 tarjetas de crédito, y aquellas que tienen hasta 6 tarjetas, tienden a tener un rango de edades más pequeño, aunque a pesar de esto, las diferencias no son significativas para estos grupos.   
+
+```{r echo = F, fig.width = 7, fig.height=7,fig.asp=0.4, fig.align="center"}
+p1 <- ggplot(data = datos, aes(x = Gender, y = Age)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red")  + ggtitle("Age vs Gender") + theme(plot.title = element_text(hjust = 0.5))
+
+p2 <- ggplot(data = datos, aes(x = Student, y = Age)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Age vs Stundet") + theme(plot.title = element_text(hjust = 0.5))
+
+p3 <- ggplot(data = datos, aes(x = Married, y = Age)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Age vs Married") + theme(plot.title = element_text(hjust = 0.5))
+
+p4 <- ggplot(data = datos, aes(x = Ethnicity, y = Age)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Age vs Ethnicity") + theme(plot.title = element_text(hjust = 0.5)) #+ theme( axis.text.x=element_blank(), axis.ticks.x=element_blank())
+
+#Require de gridExtra.
+grid.arrange(p1,p2,p3,p4, nrow = 2, ncol = 2)
+```
+
+En cuanto a *Age vs Gender, vs Student, vs Married, vs Ethnicity* no difieren significativamente el uno con respecto al otro grupo, es decir que la edad es apróximadamente igual para el género, en si estudió o no, si fue o no casado, y en el tipo de etnia. 
+
+### Education.
+
+```{r echo = F, fig.width = 7, fig.height=7, fig.asp=0.4 , fig.align="center"}
+ggplot(data = datos, aes(x = Cards, y = Education)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") +geom_jitter(alpha = 0.5 ,aes(colour = Cards), width = 0.15) + ggtitle("Education vs Cards") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+Según el número de años de educación, las personas que tienen 7, 8 y 9 tarjetas de crédito, no representan significativamente a estas poblaciones debido a las pocas observaciones que se obtuvieron para estas categorías. En cuanto a los otros grupos, las peronas tienden a tener el mismo número de tarjetas sin importar el número de años de educación y la preferencia en el número de tarjetas es muy variable en cuanto al número de años de educación, pero para quellas personas que tienen 4 tarjetas, la preferencia de tener 4 tarjetas de crédito es un poco menor en comparación de las personas que poseen otro número de tarjetas, debido a que la media y la media tienden a ser menores en comparación con las demás. 
+
+```{r echo = F, fig.width = 7, fig.height=7, fig.asp=0.4, fig.align="center"}
+p1 <- ggplot(data = datos, aes(x = Gender, y = Education)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Education vs Gender") + theme(plot.title = element_text(hjust = 0.5))
+
+p2 <- ggplot(data = datos, aes(x = Student, y = Education)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Education vs Student") + theme(plot.title = element_text(hjust = 0.5)) 
+
+p3 <- ggplot(data = datos, aes(x = Married, y = Education)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Education vs Married") + theme(plot.title = element_text(hjust = 0.5))
+
+p4 <- ggplot(data = datos, aes(x = Ethnicity, y = Education)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Education vs Ethnicity") + theme(plot.title = element_text(hjust = 0.5)) #+ theme( axis.text.x=element_blank(), axis.ticks.x=element_blank())
+
+#Require de gridExtra.
+grid.arrange(p1,p2,p3,p4, nrow = 2, ncol = 2)
+```
+
+En cuanto a la relación de *Education vs Gender, vs Married, vs Ethnicity* las relaciones entre estos grupos tiende a ser apróximadamente igual, es decir, que no importa si la persona es hombre o mujer, en si fue o no fue casado, o el tipo de etnia, el número de años de educación tenderá a ser el mismo. 
+
+Para el gráfico de *Education vs Student* el cual significa en el número de años de educación vs en si fue estudiante o no, se puede entender en el contexto de si estudió en alguna universidad y en si es autodidacta, debido a que la relación de el número de años se acomplaría más a este sentido y en referencia a lo anterior, no importa en si se fue o no estudiantes el número de años de educación es apróximadamente igual en referencia a las otras categorías.
+
+### Balance.
+
+```{r echo = F, fig.width = 7, fig.height=7, fig.asp=0.4 , fig.align="center"}
+ggplot(data = datos, aes(x = Cards, y = Balance)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") +geom_jitter(alpha = 0.5 ,aes(colour = Cards), width = 0.15) + ggtitle("Balance vs Cards") + theme(plot.title = element_text(hjust = 0.5))
+```
+
+El saldo de la tarje de crédito en promedio para las personas que poseen 7, 8 y 9 tarjetas, no representan en si a estos grupos, debido a la poca población que allí se presentra. Además para se observa que hay muchas personas que tienden a tener en un saldo promedio de 0 ya que se presenta un gran concentración de observaciones en el balance para cada una de las tarjetas, aunque para los que poseen 6 tarjetas no se presenta dicha situación. Por otro lado, aquellas personas que poseen 4 tarjetas tienden a tener una mayor variabilidad del saldo en las tajetas de crédito, a diferencia de las demás tarjetas, pero esto no difiere significativamente.
+
+```{r echo = F, fig.width = 7, fig.height=7, fig.asp=0.4, fig.align="center"}
+p1 <- ggplot(data = datos, aes(x = Gender, y = Balance)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Balance vs Gender") + theme(plot.title = element_text(hjust = 0.5))
+
+p2 <- ggplot(data = datos, aes(x = Student, y = Balance)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Balance vs Student") + theme(plot.title = element_text(hjust = 0.5))
+
+p3 <- ggplot(data = datos, aes(x = Married, y = Balance)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Balance vs Married") + theme(plot.title = element_text(hjust = 0.5))
+
+p4 <- ggplot(data = datos, aes(x = Ethnicity, y = Balance)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + ggtitle("Balance vs Ethnicity") + theme(plot.title = element_text(hjust = 0.5)) #+ theme( axis.text.x=element_blank(), axis.ticks.x=element_blank())
+
+#Require de gridExtra.
+grid.arrange(p1,p2,p3,p4, nrow = 2, ncol = 2)
+```
+
+En cuanto a la relación entre *Balance vs Gender, vs Student, vs Married, vs Ethnicity" no difieren significativamente entre los grupos, es decir, que el saldo promedio en la tarjeta de crédito es apróximadamente igual en si eres hombre o mujer, en si fuiste o no estudiante, en si era o no casado y en el tipo de etnia. Aunque aquellas personas que fueron estudiantes tienden a tener un saldo promedio mayor que el de los demás, pero estas diferencias no son significativas.
+
+### Recomendaciones y consideraciones.
+
+* Tomar como un solo grupo a las personas que poseen 6, 7, 8 y 9 tarjetas de crédito. Es decir, tomar un grupo que diga, aquellas personas que poseen 6 o más tarjetas de crédito.
+
+```{r echo=FALSE}
+datos <- ISLR::Credit
+datos$Cards <- as.character(datos$Cards)
+datos[datos$Cards == 6, 5] <- rep(">5" , length(datos[datos$Cards == 6, 5])) 
+datos[datos$Cards == 7, 5] <- rep(">5" , length(datos[datos$Cards == 7, 5]))
+datos[datos$Cards == 8, 5] <- rep(">5" , length(datos[datos$Cards == 8, 5]))
+datos[datos$Cards == 9, 5] <- rep(">5" , length(datos[datos$Cards == 9, 5]))
+datos$Cards <- as.factor(datos$Cards)
+
+p1 <- ggplot(data = datos, aes(x = Cards, y = Income)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") + geom_jitter(alpha = 0.5 ,aes(colour = Cards), width = 0.15) + ggtitle("Income vs Cards") + theme(plot.title = element_text(hjust = 0.5))
+
+p2 <- ggplot(data = datos, aes(x = Cards, y = Limit)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") +geom_jitter(alpha = 0.5 ,aes(colour = Cards), width = 0.15) + ggtitle("Limit vs Cards") + theme(plot.title = element_text(hjust = 0.5))
+
+p3 <- ggplot(data = datos, aes(x = Cards, y = Rating)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") +geom_jitter(alpha = 0.5 ,aes(colour = Cards), width = 0.15) + ggtitle("Rating vs Cards") + theme(plot.title = element_text(hjust = 0.5))
+
+p4 <- ggplot(data = datos, aes(x = Cards, y = Age)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") +geom_jitter(alpha = 0.5 ,aes(colour = Cards), width = 0.15) + ggtitle("Age vs Cards") + theme(plot.title = element_text(hjust = 0.5))
+
+p5 <- ggplot(data = datos, aes(x = Cards, y = Education)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") +geom_jitter(alpha = 0.5 ,aes(colour = Cards), width = 0.15) + ggtitle("Education vs Cards") + theme(plot.title = element_text(hjust = 0.5))
+
+p6 <- ggplot(data = datos, aes(x = Cards, y = Balance)) + geom_boxplot(alpha = 0.5) + stat_summary(fun.y=mean, geom="point", shape=18, size=3, color="red") +geom_jitter(alpha = 0.5 ,aes(colour = Cards), width = 0.15) + ggtitle("Balance vs Cards") + theme(plot.title = element_text(hjust = 0.5))
+
+#Require de gridExtra.
+grid.arrange(p1,p2,p3,p4, p5, p6, nrow = 3, ncol = 2)
+
+#datos <- ISLR::Credit
+#datos$Cards <- as.factor(datos$Cards)
+```
+
+* También hacer un estudio más detallado sobre la variable *Age* debido a la presencia de dos modas en la muestra.
+
+* Hacer una comparación más detallada de *Balance vs Age* debido a que se presentan en el gráfico de dispersión se observan dos categorias mezcladas.
+
+* No se recomienda tomar aquellos pares de variables tales que su correlación fue alta. Es decir, sólo se debería tomar una de las dos variables pero no ambas, debido a que una se puede explicar a través de la otra covariable.
+
+## b.  
+En base al anterior análisis anterior, es preferible considerar la variable *Rating* o *Limit*, debido a que su correlación es `r cor(datos$Rating, datos$Limit)` por ello, se escogerá *Rating* a considerar en la base de datos, debido a que la correlación entre $Balance\ y\ Rating\ = $`r cor(datos$Balance, datos$Rating)` $>$ `r cor(datos$Balance, datos$Rating)` $= $Balance\ y \ Limit$
+
+También se consideró tomar a *Cards* como factor y además de eso reducir la cantidad de tarjetas de crédito que manejan los usuarios, sabiendo que el último nivel de *Cards* serán aquellas personas que utilizan 6 o más tarjetas de crétido.
+
+```{r include=FALSE}
+datos <- ISLR::Credit
+datos$Cards <- as.character(datos$Cards)
+datos[datos$Cards == 6, 5] <- rep(">5" , length(datos[datos$Cards == 6, 5])) 
+datos[datos$Cards == 7, 5] <- rep(">5" , length(datos[datos$Cards == 7, 5]))
+datos[datos$Cards == 8, 5] <- rep(">5" , length(datos[datos$Cards == 8, 5]))
+datos[datos$Cards == 9, 5] <- rep(">5" , length(datos[datos$Cards == 9, 5]))
+datos$Cards <- as.factor(datos$Cards)
+```
+
+También se realizará la selección por medio de subconjuntos el cuál se determinará gráficamente usando algunos de los criterios de información $BIC$, $R^2_{Ajd}$ y el $C_p$.
+
+```{r echo=FALSE, fig.height=4}
+regfit.full<-regsubsets(Balance~., data=datos[,c(-1,-3)], nvmax=9)
+reg.summary<-summary(regfit.full)
+par(mfrow = c(1, 2), no.readonly = TRUE)
+#BIC
+a1 <- which.min(reg.summary$bic)
+plot(reg.summary$bic, xlab = " Number of Variables", ylab = " BIC", type = "b")
+points(a1, reg.summary$bic[a1], col = " red", cex = 2, pch = 20)
+plot(regfit.full, scale ="bic")
+```
+
+En los resultados obtenidos, sólo se presentó un par de gráficas, la del *BIC*, debido a que el mejor subconjunto de variables fueron: *Income, Rating y Student* y en referencia a las obtenidas por el $R^2_{Ajd}$ son las mismas que en el BIC, pero es debido a que la escala es tan pequeña que es más fáctible escoger el codo ya que con 3 covariables en adelante el $R^2_{adj}$ se apróxima a 0.95, y para $C_p$ fueron 5, (*Income, Rating, Age y Student*). Siendo así, por parcimónia, entre los 3, dos de los métodos escogieron las mismas covariables, por tanto se escogerá el subconjunto *Income, Rating y Student*.
+
+## c.  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+require(gam)
+require(fANCOVA)
+```
+
+Para este literal se plantea utilizar varios métodos para mejorar el suavizamiento a través de 4 tipos de polinomios, como lo es el *Spline Cúbico*, *Spline cúbico natural*, *Smoothing spline* y *Loess*. 
+
+La idea principal es utilizar modelos GAM, teniendo en cuenta que la mejor elección para cada uno de los modelos dependerá de la selección de los 4 tipos de modelos que se mensionarón anteriormente. Esta selección se hará por medio del analisis de varianza para modelos anidados.
+
+### Spline Cúbico básico
+
+Se utilizó CV con el método k-fold ($K=10$) para buscar el número de nodos optimos equiespaciadamente, tal que el MSE sea menor, utilizando como semilla 123.
+
+```{r}
+MSE.bs<- matrix(nrow = 100, ncol = 3); cont <- 1; set.seed(123)
+for (i in 1:10) {
+  for(j in 1:10) {
+  glm.fit.bs<-glm(Balance ~ bs(Income,df = (3 + i)) + bs(Rating, df = (3 + j))
+                    + Student, data = datos)
+  cv.err.bs<-cv.glm(datos, glm.fit.bs, K = 10)
+  MSE.bs[cont,1] <- cv.err.bs$delta[1]; MSE.bs[cont,2]<-i; MSE.bs[cont,3]<-j; cont<-cont + 1
+  }
+}
+MSE.bs[which.min(MSE.bs[,1]),]
+```
+
+Una vez se obtuvo el número optimo de nodos, para *Income* y *Rating* se llegó a la conclusión que el número de nodos optimos para *Income* es 1 y para *Rating* es 5. Ahora se probará dicha hipótesis de si agregando este suavizamiento el modelo mejora o no con respecto a la variabilidad de *Balance* 
+
+```{r}
+Mod1 <- gam(Balance ~ Income + Rating + Student, data = datos)
+Mod2.bs <- gam(Balance ~ bs(Income, df = 4) + bs(Rating, df = 8) + Student, data = datos)
+anova(Mod1, Mod2.bs, test = "F")
+```
+
+El anterior resultado muestra que al agregar un suavizamiento spline cubico básico con 1 nodos a *Income* y 5 a *Rating* lleva a mejorar la variabilidad de *Balance*.
+
+### Spline cúbico natural.
+
+Se repite el mismo procedimiento que se realizó con spline cúbico básico.
+
+```{r}
+MSE.ns<- matrix(nrow = 100, ncol = 3); cont <- 1; set.seed(123)
+for (i in 1:10) {
+  for(j in 1:10) {
+  glm.fit.ns <- glm(Balance ~ ns(Income,df = (3 + i)) + ns(Rating, df = (3 + j))
+                      + Student, data = datos)
+  cv.err.ns<-cv.glm(datos, glm.fit.ns, K = 10)
+  MSE.ns[cont,1]<-cv.err.ns$delta[1]; MSE.ns[cont,2]<-i; MSE.ns[cont,3]<-j; cont<-cont + 1
+  }
+}
+MSE.ns[which.min(MSE.ns[,1]),]
+```
+
+Se obtuvo que el número de nodos optimo con un suaviZamiento de spline cúbico natural es cuando *Income* tiene 1 nodo, y *Rating* tiene 5 nodos. Ahora se probará si este suavizamiento mejora o no el modelo sin suavizamiento.
+
+```{r}
+Mod2.ns <- gam(Balance ~ ns(Income, df = 2) + ns(Rating, df = 6) + Student, data = datos)
+anova(Mod1, Mod2.ns, test = "F")
+```
+
+En efecto, el modelo con suavizamiento spline natural mejora el modelo.
+
+### Smoothing spline.
+
+Para este caso se utilizará smoothing spline con el método de *LOOCV* para encontrar los grados de libertad para cada covariable y luego se comparará si el modelo mejora con respecto al modelo básico.
+
+```{r}
+Mod1.sp.Inc <- smooth.spline(datos$Income, datos$Balance, cv = TRUE); Mod1.sp.Inc$df
+Mod1.sp.Rat <- smooth.spline(datos$Rating, datos$Balance, cv = TRUE); Mod1.sp.Rat$df
+```
+
+Para este caso encontramos que los grados de libertad calculados para *Income* fueron $1.800224$ y para *Rating* fueron de $7.437145$, luego ajustamos un modelo completo con todos estos parametros y luego verificamos si la variabilidad con respecto a *Balance* mejora frente al modelo básico.
+
+```{r}
+Mod2.sp <- gam(Balance ~ s(Income, spar = 1.499966) + s(Rating, spar = 0.9408872)
+               + Student, data = datos)
+
+anova(Mod1, Mod2.sp, test = "F")
+```
+
+En efecto, el modelo mejora con respecto al modelo básico.
+
+### Regresión Local.
+
+Hay dos métodos por los cuales se puede hacer regresión local, una lineal y otra cuadrática, en base a ello se requiere encontrar el valor optimo de suavizamiento tal que sea minimizado a través de algún criterio de información. Para ello se encuentra en la librería *fANCOVA* la función *loess.as* la cual te permite buscar de manera automática el valor optimo de suavizamiento. En ella se encuentra.
+
+En la función se encuentra el parametro "degree", es el grádo del polinomio; "criterion", es el criterio de información a utilizar (AICc y GCV), sólo tiene el AIC corregido por el sesgo y generalized cross validation. Por defecto, el programa utiliza regresión local lineal (degree = 1).
+
+Ahora buscaremos el parámetro optimo de suavizamiento para *Income* y *Rating*, utilizando el criterio de información AICC y GCV.
+
+```{r}
+Mod1.lo.Inc.GCV <- loess.as(datos$Income, datos$Balance,criterion="gcv", plot = F)
+(Span.Inc.GCV <- Mod1.lo.Inc.GCV$pars$span)
+Mod1.lo.Rat.GCV <- loess.as(datos$Rating, datos$Balance,criterion="gcv", plot = F)
+(Span.Rat.GCV <- Mod1.lo.Rat.GCV$pars$span)
+```
+
+Ahora aplicaremos estos spam para evaluar el si mejora o no el modelo básico.
+
+```{r}
+Mod2.lo <- gam(Balance ~ lo(Income, span = 0.8655853) + lo(Rating, span = 0.370172)
+               + Student, data = datos)
+anova(Mod1, Mod2.lo, test = "F")
+```
+
+En resumen, se muestra que al agregar el parámetro de suavizamiento para *Income* y *Rating* por medio de regresión local lineal mejora el modelo básico.
+
+## d.  
+
+Para la realización de la validación cruzada, se dividirá en dos subconjuntos, un $70\%$ como entredamiento y el $30\%$ para validación.
+
+```{r}
+set.seed(123)
+sub <- sample(1:dim(datos)[1], floor(0.7*dim(datos)[1]))
+Train <- datos[sub,]; Test <- datos[-sub,]
+```
+
+Los modelos que se eligieron en el punto anterior fueron:
+
+```{r}
+#Spline básico
+Mod.bs <- gam(Balance ~ bs(Income, df = 4) + bs(Rating, df = 8) + Student, data = datos)
+#Spline natural
+Mod.ns <- gam(Balance ~ ns(Income, df = 2) + ns(Rating, df = 6) + Student, data = datos)
+#Smoothing Spline
+Mod.sp <- gam(Balance ~ gam::s(Income, df = 1.800224) + gam::s(Rating, df = 7.437145)
+               + Student, data = datos)
+#Regresion local
+Mod.lo <- gam(Balance ~ gam::lo(Income, span = 0.8655853) + gam::lo(Rating, span = 0.370172)
+               + Student, data = datos)
+```
+
+Luego se calcula el MSE de entrenamiento de y el de validación.
+
+```{r echo=FALSE}
+MSE1 <- mean((Train$Balance - Mod.bs$fitted.values)^2)
+MSE2 <- mean((Train$Balance - Mod.ns$fitted.values)^2)
+MSE3 <- mean((Train$Balance - Mod.sp$fitted.values)^2)
+MSE4 <- mean((Train$Balance - Mod.lo$fitted.values)^2)
+MSE5 <- mean((Test$Balance - predict(Mod.bs, newdata = Test))^2)
+MSE6 <- mean((Test$Balance - predict(Mod.ns, newdata = Test))^2)
+MSE7 <- mean((Test$Balance - predict(Mod.sp, newdata = Test))^2)
+MSE8 <- mean((Test$Balance - predict(Mod.lo, newdata = Test))^2)
+```
+```{r echo = FALSE}
+M <- as.data.frame(cbind(rbind(MSE1,MSE2,MSE3,MSE4), rbind(MSE5,MSE6,MSE7,MSE8)))
+names(M) <- c("MSE Train", "MSE Test")
+row.names(M) <- c("Modelo 1", "Modelo 2", "Modelo 3", "Modelo 4")
+
+kable(
+  M,
+  align = "c",
+  booktabs = TRUE
+) %>% kable_styling(position = "center")
+```
+
+En base al anterior resultado, se concluye que el modelo con un suavizamiento con el spline cúbico básico es el mejor, debido a que tienen un mejor MSE test.
+
+# 4. Actividad 1.
+
+Considere la base de datos **DATOS_A**.
+
+1. Seleccione las variables más importantes entre $X_1, X_2, \cdots , X_{14}$ para explicar $Y$.
+
+2. Realice gráficos descriptivos con las variables seleccionadas en el item anterior.
+
+3. Ajuste al menos 3 modelos GAMLSS donde considere distintas funciones de suavizamiento, además de un ajuste para la variabilidad.
+
+4. Seleccione el mejor modelo entre los 3 anteriores.
+
+```{r echo=FALSE}
+require(corrplot)
+require(gamlss)
+require(gamlss.add)
+```
+
+
+## Solución
+
+## 1.  
+Primero se analizará un gráfico de correlaciones para comparar observalar las correlaciones altas entre las covariables y así determinar si es viable o no agregar esa covariable, después se hará una reducción por subconjuntos para determinar cuales son las covariables más relevantes para este caso usando algunos criterios de información.
+
+```{r echo=FALSE}
+datos <- read.table(file = "DATOS_A.txt", sep = " ", header = T, dec = ".")
+kable(
+  head(datos, 5),
+  align = "c",
+  booktabs = TRUE
+) %>% kable_styling(latex_options = "scale_down")
+```
+
+### Gráfico de correlación. 
+
+```{r echo=FALSE, out.width='60%', fig.align='center'}
+mcor <- cor(datos)
+corrplot(mcor, type = "upper", order = "original", tl.col = "black", tl.srt = 45)
+mcor <- as.data.frame(mcor)
+```
+
+En este gráfico se logra observar en colores azúles aquellas observaciones que tienden a una correlación positiva, y en colores rojizos aquellas que tienden a una correlación negativa, en este caso, todos los puntos azules de la diagonal son las correlaciones entre ellas mismas, es decir que su correlación es 1, pero además de ello hay un punto azúl oscuro entre las observaciones *X9* y *X11* debido a que su correlación es `r mcor["X9","X11"]`. Teniendo en cuenta esto, tomaremos aquella covariable que tenga una correlacón en valor absoluto más alto con la variable *Y*. Debido a que la correlación entre *Y* y *X9* (`r mcor["Y","X9"]`) es igual a la correlación entre *Y* y *X11* (`r mcor["Y","X11"]`) se tomará a *X9* como covariable.
+
+```{r echo=FALSE}
+regfit.full<-regsubsets(Y ~., data=datos[,-12], nvmax=9)
+reg.summary<-summary(regfit.full)
+par(mfrow = c(1, 2), no.readonly = TRUE)
+#BIC
+a1 <- which.min(reg.summary$bic)
+plot(reg.summary$bic, xlab = " Number of Variables", ylab = " BIC", type = "b")
+points(a1, reg.summary$bic[a1], col = " red", cex = 2, pch = 20); grid()
+plot(regfit.full, scale ="bic")
+```
+
+Debido a que el criterio de selección de subconjuntos del BIC obtuvo que las mejores covariables que ayudan a minimizar el BIC eran *X1, X6 y X11*  además de eso, también se consideró el criterio del $R^2_{ajustado}$ el cual obtuvo el mismo resultado que el *BIC*. También se consideró el criterio del $C_p$ pero este obtuvo que el mejor subconjunto de variables eran 6 covariables, por tanto por parcimonia y porque no se tiene un experto sobre la base de datos, se consideró que el mejor subconjunto que ayuden a explicar a *Y* son *X1, X6 y X11*.
+
+## 2.  
+Se decide en primer lugar hacer gráficos de dispersión para entender a más detalle el comportamiento de las covariables con respecto a la variable *Y*
+
+```{r echo=FALSE}
+p1 <- ggplot(data = datos, aes(x = X1, y = Y)) + geom_point(alpha = 0.5) + ggtitle("Y vs X1") + theme(plot.title = element_text(hjust = 0.5))
+
+p2 <- ggplot(data = datos, aes(x = X6, y = Y)) + geom_point(alpha = 0.5) + ggtitle("Y vs X6") + theme(plot.title = element_text(hjust = 0.5))
+
+p3 <- ggplot(data = datos, aes(x = X10, y = Y)) + geom_point(alpha = 0.5) + ggtitle("Y vs X10") + theme(plot.title = element_text(hjust = 0.5))
+#Require de gridExtra.
+grid.arrange(p1,p2,p3, nrow = 1, ncol = 3)
+```
+
+* Para el gráfico *Y vs X1* notamos que pareciera tener una tendencia senosoidal a pesar de tener una variabilidad bastante grande con respecto a *Y*, pero al parecer la variabilidad permanece constante al rededor de la tendencia senosoidal.
+
+* Para el gráfico de *Y vs X6* notamos un comportamiento de decaimiento exponencial a medida que la variabilidad de las observaciones aumenta.
+
+* Para el gráfico *Y vs X10* se observa una  correlación lineal positiva, además de eso, la variabilidad parece permanecer constante al rededor de la tendencia.
+
+## 3.  
+En base al analisis descriptivo se pensará en tres modelos basados en dichos comportamientos. 
+
+### Modelo básico.
+
+```{r echo=FALSE}
+set.seed(123)
+sub <- sample(1:dim(datos)[1], floor(0.7*dim(datos)[1]))
+Train <- datos[sub,]; Test <- datos[-sub,]
+```
+
+
+```{r}
+Mod1 <- gamlss(formula = Y ~ X1 + X6 + X10, sigma.fo = ~ X1 + X6, 
+               family = NO(mu.link = "identity", sigma.link = "identity"), 
+               data = Train, trace = F); summary(Mod1)
+```
+
+Al ajustar una regresión lineal multiple, modelando a través de una normal la respuesta, y dejando variabilidad sólo con *X1* y *X6*, se observa que tanto los betas de X1, X6 y X11 son significativos, además los alpha's para X1 y X6 son significativas. 
+
+### P-Splines
+
+```{r}
+Mod2 <- gamlss(Y ~ ps(X1) + ps(X6) + X10, sigma.fo = ~ ps(X1) + ps(X6), 
+               family = NO(mu.link = "identity", sigma.link = "log") , 
+               data = Train, trace = F); summary(Mod2)
+```
+
+Para este caso, se utilizó P-Spline para suavisar la tendencia de las observaciones, y un suavizamiento para la variabilidad de *X1* y *X6*, debido a que *X11* es casi lineal con respecto a *Y* no lo agregué al termino de la varibilidad  (sigma.fo), además la respuesta la modelé con una normal.
+
+### Redes neuronales.
+
+```{r}
+Mod3 <- gamlss(Y ~ nn(~X1) + nn(~X6) + X10, sigma.fo = ~ nn(~X1 + X6 +X10), 
+               data = Train, trace = F)
+summary(Mod3)
+```
+
+Usando un suavizamiento con redes neuronales, tanto para la tendencia, como para la variabilidad de  X1, X2 y X10.
+
+### Coeficiente variable P-Splines
+
+```{r}
+Mod4 <- gamlss(Y ~ pvc(X1 + X6 + X10), sigma.fo = ~ pvc(X6 + X1), 
+               data = Train, family = NO(mu.link = "identity", 
+                                         sigma.link = "log" ), trace = F)
+summary(Mod4)
+```
+Suavizamiento con el Coeficiente variable P-Splines en la tendencia, y suavizamiento en la variabilidad con el coeficiente variable P-Spline.
+
+## 4. 
+
+### Criterio AIC.
+
+```{r echo=FALSE}
+GAIC(Mod1, Mod2, Mod3, Mod4)
+```
+
+### MSE.
+
+```{r echo=FALSE}
+MSE1 <- mean((Train$Y - Mod1$residuals)^2)
+MSE2 <- mean((Train$Y - Mod2$residuals)^2)
+MSE3 <- mean((Train$Y - Mod3$residuals)^2)
+MSE4 <- mean((Train$Y - Mod4$residuals)^2)
+MSE5 <- mean((Test$Y - predict(Mod1, newdata = Test))^2)
+MSE6 <- mean((Test$Y - predict(Mod2, newdata = Test))^2)
+MSE7 <- mean((Test$Y - predict(Mod3, newdata = Test))^2)
+MSE8 <- mean((Test$Y - predict(Mod4, newdata = Test))^2)
+```
+```{r echo = FALSE}
+M <- as.data.frame(cbind(rbind(MSE1,MSE2,MSE3,MSE4), rbind(MSE5,MSE6,MSE7,MSE8)))
+names(M) <- c("MSE Train", "MSE Test")
+row.names(M) <- c("Modelo 1", "Modelo 2", "Modelo 3", "Modelo 4")
+
+kable(
+  M,
+  align = "c",
+  booktabs = TRUE
+) %>% kable_styling(position = "center")
+```
+
+Con los resultados del AIC y la prueba con el MSE Test se concluye que el mejor modelo fue el 2, es decir el suavizamiento P-Spline para la tendecia de X1 y X6, y aplicando suavizamiento P-Spline a la variabilidad de X1 y X6, modelando la respuesta como una normal.
+
+# 4. Actividad 2.
+
+La base de datos **DATOS_B** contiene registros de accidentalidad de 728 días en una de las avenidas principales de cierta
+ciudad. Las variables se codifican como:
+
+* $Y$: Número de accidentes díarios.
+
+* $X_1$: Número de vehículos que transitan por día.
+
+* $X_2$: Llueve (1) o No llueve (0).
+
+* $X_3$: Día de la semana.
+
+1. Ajuste un modelo gamlss a los datos considerando la distribución Poisson.
+
+2. Interprete el modelo ajustado.
+
+3. Escriba la ecuación del modelo.
+
+## Solución
+
+## 1. 
+
+```{r echo=FALSE}
+datos <- read.csv("DATOS_B.txt", header = T, sep = " ")
+datos$X2 <- factor(datos$X2, labels = c("No llueve", "Llueve"))
+```
+
+```{r message=FALSE, warning=FALSE}
+mod1<- gamlss(Y~X1+X2+X3, family = PO, data = datos)
+summary(mod1)
+```
+
+## 2.  
+Dado que la variable respuesta se estima en escala logaritmica, los betas estimados en el modelo no se pueden interpretar directamente; sin embargo, se podría decir que para  el número de accidentes registrados en una ciudad por un duración de dos años:
+
+* La cantidad de vehículos influye notablemente en la estimación del número de accidentes diarios.
+
+* Llover incrementa un poco la cantidad de accidentes, aunque ésta no es tan considerable.
+
+* El día de la semana donde más incrementa el número de accidentes es el Miércoles, mientras que el día Sábado disminuye el número de éstos.
+
+## 3. 
+
+$log(\hat{Y})= -0.3779+0.0003X1+0.0128X2_{Llueve}+0.3956X3_{Lunes}+0.3937X3_{Martes}$
+$+0.3969X3_{Miércoles}+0.3899X3_{Jueves}+0.3923X3_{Viernes}+0.3110X3{Sábado}$
+
+# Punto 5
+
+Considere la misma base de datos de precios de las acciones utilizada en el trabajo 1, es decir, en el periodo que va del 1 de enero de 2015 hasta el 31 de diciembre de 2019, según su grupo.
+
+```{r message=FALSE, warning=FALSE, echo = FALSE}
+library(lubridate); library(ggplot2); library(GGally)
+library(RColorBrewer); library(ISLR); library(splines)
+library(boot); library(gam); library(gamlss)
+```
+
+```{r echo=FALSE}
+datos <- read.csv("AAPL.csv")
+datos$Date <- ymd(datos$Date)
+Year <- year(ymd(datos$Date))
+datos$Year <- factor(Year)
+#Fecha como indice del tiempo
+datos$Tiempo <- seq(1,1257,1)
+#calculo de la variable diferencia
+datos$Diferencia <- datos$High - datos$Low
+```
+
+## a)
+Realice los gráficos de precio de cierre versus fecha, volumen y 
+$diferencia=Precio~máximo - Precio~mínimo$.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggpairs(datos[,c(5, 7, 9, 10)]) + 
+  scale_fill_brewer() + 
+  scale_colour_brewer() 
+```
+
+Se observa que la correlación mas alta con la variable respuesta la presenta el Tiempo, la variabilidad de Volumen respecto a Diferencia tiende a hacerse mayor a medida que la contidad de transacciones aumenta, la correlación entre Volumen y precio de cierre es negativa lo que indica una relación inversa entre estas dos variables, la correlación entre las variabes Tiempo y Volumen es negativa. 
+
+```{r echo=FALSE}
+ggplot(data = datos, aes(x=Date, y=Close, color = Year)) + 
+  geom_line() 
+```
+
+
+El gráfico anterior ilustra el comportamiento temporal del precio de cierre de las acciones de APPLE entre los años 2015 hasta 2020, en general el comportamiento de este precio es ascendente, sin embargo entre finales del año 2018 a 2019 se observa un descenso muy fuerte en dicho precio, para el año actual el precio de las acciones de la compañía APPLE están alrededor de los $70$ dólares. Entre los años 2016 a 2017 este precio fue el menor, estando por debajo de los $30$ dólares.
+
+```{r echo=FALSE}
+ggplot(data = datos, aes(x=Volume, y=Close,  color = Year)) + 
+  geom_point()
+```
+
+Para el gráfico de Volumen y precio de cierre se observa que a mayor Volumen más bajo es el precio de cierre, algo que se habia observado en el gráfico 1 dado que la correlación entre estas dos variables es negativa.
+
+```{r echo=FALSE}
+ggplot(data = datos, aes(x=Diferencia, y=Close,  color = Year)) + 
+  geom_point()
+```
+
+La diferencia en el precio de la acción en el período de 2015 a 2017 no es superior a $2$ dólares, mientras que en los años 2018 y 2019 esta diferencia supera los $2$ dólares en una cantidad muy pequeña de observaciones.
+
+## b) 
+
+Plantee al menos 4 modelos GAM para explicar el precio de cierre en función de la fecha (claramente la fecha como tal no se debe usar sino
+más bien una variable numérica que vaya desde 1 hasta el total de datos y que describa los días 1 hasta el día final de la base de datos), volumen y diferencia. Describa el proceso para plantear dichos modelos.
+
+### Solución 
+
+Se optimizaran las siguientes funciones polinomios, splines cúbicos, splines cúbicos naturales y smoothing splines para cada una de las covaribles, de estas funciones ajustadas se seleccionara la que menor $MSE$ produzca para las covariabes Volume y Diferencia, para la covariable Tiempo se consideraran las 4 fuciones optimizadas. Luego de ajustar los modelos con las combinaciones de funciones posibles, se realiza una comparación anova de modelos, con el fin de seleccionar los 4 mejores. 
+
+### Funciones para la variable Tiempo
+
+```{r echo=FALSE}
+MSE_poliT <- vector()
+for (i in 1:12){
+  Modelo1 <- lm(Close ~ poly(Tiempo,i), data=datos)
+  Pred1 <- predict(Modelo1, datos); MSE_poliT[i]<-mean((Pred1-datos$Close)^2)
+}
+#SPLINE CUBICO
+MSE.bst <- vector()
+set.seed(1005279662)
+for(i in 1:12){
+  glm.fit.bs <- glm(Close ~ bs(Tiempo, df=(3+i)), data = datos)
+  cv.err.bs <- cv.glm(datos, glm.fit.bs, K=10); MSE.bst[i] <- cv.err.bs$delta[1]
+}
+#SPLINE CUBICO NATURAL
+MSE.nst<-vector()
+set.seed(1005279662)
+for(i in 1:12){
+  glm.fit.ns <- glm(Close~ns(Tiempo,df=(1+i)),data=datos)
+  cv.err.ns <- cv.glm(datos,glm.fit.ns,K=10); MSE.nst[i] <- cv.err.ns$delta[1]
+}
+#SMOOTHING SPLINE 
+MSE.sst <- vector()
+set.seed(1005279662)
+spar1 <- seq(0.1, 1, 0.1)
+for (i in 1:length(spar1)) {
+  glm.fit.ss <- glm(Close ~ gam::s(Tiempo, spar = spar1[i]), data=datos)
+  cv.err.ss <- cv.glm(datos, glm.fit.ss, K=10); MSE.sst[i] <- cv.err.ss$delta[1]
+}
+```
+
+```{r echo = FALSE}
+layout(matrix(c(1,1,2,2,3,3,4,4), 2, 4, byrow = TRUE)) 
+plot(MSE_poliT, xlab="Grado del polinomio", ylab="MSE",type="b",col=4,
+     main = "Polinomio")
+points(x=10, y=7.014490, col = "red", pch = 19)
+
+plot(MSE.bst, type="b", main="Spline Cúbico", col =4, 
+     xlab = "Número de Nodos", ylab = "MSE")
+points(x=10, y=5.113520, col = "red", pch = 19)
+
+plot(MSE.nst,type="b", main="Spline cúbico natural", col = 4, 
+     xlab = "Número de Nodos", ylab = "MSE")
+points(x=10, y=5.634784, col = "red", pch = 19)
+
+plot(spar1, MSE.sst, type="b", main="Smoothing Spline", col = 4, 
+     xlab = "Spar", ylab = "MSE")
+points(x = 0.2, y = 28.97239, col = "red", pch = 19)
+```
+
+Se observa que el menor $MSE$ es producido por un Spline Cúbico con 10 nodos. 
+
+### Funciones para la variable Volumen
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+MSE_poliV <- vector()
+for (i in 1:12){
+  Modelo1 <- lm(Close ~ poly(Volume,i), data=datos)
+  Pred1 <- predict(Modelo1, datos); MSE_poliV[i]<-mean((Pred1-datos$Close)^2)
+}
+#SPLINE CUBICO
+MSE.bsv <- vector()
+set.seed(1005279662)
+for(i in 1:12){
+  glm.fit.bs <- glm(Close ~ bs(Volume, df=(3+i)), data = datos)
+  cv.err.bs <- cv.glm(datos, glm.fit.bs, K=10); MSE.bsv[i] <- cv.err.bs$delta[1]
+}
+#SPLINE CUBICO NATURAL
+MSE.nsv <- vector()
+set.seed(1005279662)
+for(i in 1:12){
+  glm.fit.ns <- glm(Close~ns(Volume,df=(1+i)),data=datos)
+  cv.err.ns <- cv.glm(datos,glm.fit.ns,K=10); MSE.nsv[i] <- cv.err.ns$delta[1]
+}
+#SMOOTHING SPLINE 
+MSE.ssv <- vector()
+set.seed(1005279662)
+spar1 <- seq(0.1, 1, 0.1)
+for (i in 1:length(spar1)) {
+  glm.fit.sv <- glm(Close ~ gam::s(Volume, spar = spar1[i]), data = datos)
+  cv.err.sv <- cv.glm(datos, glm.fit.sv, K=10); MSE.ssv[i] <- cv.err.sv$delta[1]
+}
+
+```
+
+```{r echo = FALSE}
+layout(matrix(c(1,1,2,2,3,3,4,4), 2, 4, byrow = TRUE)) 
+plot(1:12,MSE_poliV, xlab="Grado del polinomio", ylab="MSE",type="b",col=4,
+     main = "Polinomio")
+points(x=12, y=103.3217, col = "red", pch = 19)
+
+plot(MSE.bsv, type="b", main="Spline Cúbico", col =4, 
+     xlab = "Número de Nodos", ylab = "MSE")
+points(x=1, y=104.3396, col = "red", pch = 19)
+
+plot(MSE.nsv,type="b", main="Spline cúbico natural", col = 4, 
+     xlab = "Número de Nodos", ylab = "MSE")
+points(x=2, y=104.2730, col = "red", pch = 19)
+
+plot(spar1, MSE.ssv, type="b", main="Smoothing Spline", col = 4, 
+     xlab = "Spar", ylab = "MSE")
+points(x = 0.7, y = 106.9552, col = "red", pch = 19)
+```
+
+
+El polinomio de grado 12 produce un $MSE = 103.32$, el Spline Cúbico un $MSE = 104.34$, el Spline Cúbico Natural un $MSE = 104.27$ y el Smoothing Spline un $MSE = 106.9552$, con un polinomio de grado alto como 12 se puede incurrir en sobreajuste del modelo y al observar que las diferencias en los $MSE$ con las 4 funciones no son significativas se decide usar como función un Spline Cúbico con $1$ nodo para la variable Volumen.  
+
+### Funciones para la variable Diferencia
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+MSE_polid <- vector()
+for (i in 1:12){
+  Modelo1 <- lm(Close ~ poly(Diferencia,i), data=datos)
+  Pred1 <- predict(Modelo1, datos); MSE_polid[i]<-mean((Pred1-datos$Close)^2)
+}
+#SPLINE CUBICO
+MSE.bsd <- vector()
+set.seed(1005279662)
+for(i in 1:12){
+  glm.fit.bs <- glm(Close ~ bs(Diferencia, df=(3+i)), data = datos)
+  cv.err.bs <- cv.glm(datos, glm.fit.bs, K=10); MSE.bsd[i] <- cv.err.bs$delta[1]
+}
+#SPLINE CUBICO NATURAL
+MSE.nsd <- vector()
+set.seed(1005279662)
+for(i in 1:12){
+  glm.fit.ns <- glm(Close~ns(Diferencia,df=(1+i)),data=datos)
+  cv.err.ns <- cv.glm(datos,glm.fit.ns,K=10); MSE.nsd[i] <- cv.err.ns$delta[1]
+}
+#SMOOTHING SPLINE 
+MSE.ssd <- vector()
+set.seed(1005279662)
+spar1 <- seq(0.1, 1, 0.1)
+for (i in 1:length(spar1)) {
+  glm.fit.sd <- glm(Close ~ gam::s(Diferencia, spar = spar1[i]), data = datos)
+  cv.err.sd <- cv.glm(datos, glm.fit.sd, K=10); MSE.ssd[i] <- cv.err.sd$delta[1]
+}
+```
+
+```{r echo = FALSE}
+layout(matrix(c(1,1,2,2,3,3,4,4), 2, 4, byrow = TRUE)) 
+plot(MSE_polid, xlab="Grado del polinomio", ylab="MSE",type="b",col=4,
+     main = "Polinomio")
+points(x=12, y=92.70189, col = "red", pch = 19)
+
+plot(MSE.bsd, type="b", main="Spline Cúbico", col =4, 
+     xlab = "Número de Nodos", ylab = "MSE")
+points(x=10, y=94.47809, col = "red", pch = 19)
+
+plot(MSE.nsd,type="b", main="Spline cúbico natural", col = 4, 
+     xlab = "Número de Nodos", ylab = "MSE")
+points(x=2, y=94.01034, col = "red", pch = 19)
+
+plot(spar1, MSE.ssd, type="b", main="Smoothing Spline", col = 4, 
+     xlab = "Spar", ylab = "MSE")
+points(x = 1, y = 100.2660, col = "red", pch = 19)
+```
+
+El polinomio de grado 12 produce un $MSE = 92.70$, el Spline Cúbico un $MSE = 94.48$, el Spline Cúbico Natural un $MSE = 94.01$ y el Smoothing Spline un $MSE = 100.26$, con un polinomio de grado alto como 12 se puede incurrir en sobreajuste del modelo y al observar que las diferencias en los $MSE$ con las 4 funciones no son significativas se decide usar como función un Spline Cúbico Natural con $2$ nodos para la variable Diferencia.
+
+### Ajuste de Modelos
+
+```{r echo=TRUE}
+#Partiendo de un polinomio de grado 10 para Tiempo
+Mod1 <- gam(Close ~ poly(Tiempo, degree = 10), data = datos)
+Mod2 <- gam(Close ~ poly(Tiempo, degree = 10) + bs(Volume, df = 4), 
+            data = datos)
+Mod3 <- gam(Close ~ poly(Tiempo, degree = 10) + bs(Volume, df = 4) + 
+            ns(Diferencia, df = 3), data = datos)
+anova(Mod1, Mod2, Mod3, test = "F")
+```
+
+La tabla Anova para la comparación de modelos, muestra que el modelo 2 y 3 son significativos, pero la Suma de cuadrados para el modelo 3 es menor, por tanto se prefiere el modelo 3. 
+
+```{r echo=TRUE}
+#Partiendo de un Spline Cúbico con 13 grados de libertad
+Mod4 <- gam(Close ~ bs(Tiempo , df = 13), data = datos)
+Mod5 <- gam(Close ~ bs(Tiempo , df = 13) + bs(Volume, df = 4), 
+            data = datos)
+Mod6 <- gam(Close ~ bs(Tiempo , df = 13) + bs(Volume, df = 4) + 
+            ns(Diferencia, df = 3), data = datos)
+anova(Mod4, Mod5, Mod6, test = "F")
+```
+
+La tabla Anova para la comparación de modelos, muestra que el modelo 5 es significativo, en este modelo se les aplica un Spline Cúbico a las dos covariables. 
+
+```{r echo=TRUE}
+#Partiendo de un Spline Cúbico natural con 11 grados de libertad
+Mod7 <- gam(Close ~ ns(Tiempo , df = 11), data = datos)
+Mod8 <- gam(Close ~ ns(Tiempo , df = 11) + bs(Volume, df = 4), 
+            data = datos)
+Mod9 <- gam(Close ~ ns(Tiempo , df = 11) + bs(Volume, df = 4) + 
+            ns(Diferencia, df = 3), data = datos)
+anova(Mod7, Mod8, Mod9, test = "F")
+```
+
+La tabla Anova para la comparación de modelos, muestra que el modelo 8 es significativo, en este modelo se les aplica un Spline Cúbico Natural a la covariable Timepo y ,un Spline Cúbico a la variable Volumen. 
+
+```{r echo=TRUE}
+#Partiendo de un Smoothing Spline con spar = 0.2
+Mod10 <- gam(Close ~ gam::s(Tiempo , spar = 0.2), data = datos)
+Mod11 <- gam(Close ~ gam::s(Tiempo , spar = 0.2) + bs(Volume, df = 4), 
+            data = datos)
+Mod12 <- gam(Close ~ gam::s(Tiempo , spar = 0.2) + bs(Volume, df = 4) + 
+            ns(Diferencia, df = 3), data = datos)
+anova(Mod10, Mod11, Mod12, test = "F")
+```
+
+La tabla Anova para la comparación de modelos, muestra que tanto el modelo 11 como el 12 son significativos, pero el P-valor asociado al modelo 12 es el más pequeño, por lo que se prefiere dicho modelo, en el se ajusta un Smoothing Spline para la covariable Tiempo, spline Cúbico para Volume y Spline Cúbico Natural para la Diferencia. 
+
+Por tanto los 4 modelos propestos son:
+
+- Close ~ poly(Tiempo, degree = 10) + bs(Volume, df = 4) + ns(Diferencia, df = 3).
+
+- Close ~ bs(Tiempo , df = 13) + bs(Volume, df = 4).
+
+- Close ~ ns(Tiempo , df = 11) + bs(Volume, df = 4).
+
+- Close ~ gam::s(Tiempo , spar = 0.2) + bs(Volume, df = 4) + ns(Diferencia, df = 3)
+
+## c) 
+
+Entre los modelos ajustados en el item anterior, seleccione el mejor utilizando CV.
+
+Inicialmente se debe partir el conjunto de datos en entrenamiento y validación, pero esta partición no se puede realizar de manera aleatoria ya que el conjunto de datos posee una estructura temporal, por lo tanto se dejaran las observaciones que corresponden al año $2018$ como conjunto de prueba, son $251$ observaciones que representan aproximadamente el $20\%$ del total de observaciones. Se selecciono este año como conjunto de prueba ya que al seleccionar $2019$ como conjunto de prueba se obtiene un valor de $MSE$ demasiado grande debido a que el modelo estaría haciendo predicciones para valores fuera del rango con el que fue entrenado.
+
+```{r}
+x <- which(datos$Year == "2018")
+train <- datos[-x,]
+test <- datos[x, ]
+```
+
+```{r echo=TRUE}
+#Ajuste y Predicción con el Modelo 3
+Mod3 <- gam(Close ~ poly(Tiempo, degree = 10) + bs(Volume, df = 4) + 
+            ns(Diferencia, df = 3), data = train)
+predict3 <- predict(Mod3, test)
+MSE <- mean((predict3 - test$Close)^2)
+MSE
+```
+```{r echo=TRUE}
+#Ajuste y Predicción con el Modelo 5
+Mod5 <- gam(Close ~ bs(Tiempo , df = 13) + bs(Volume, df = 4), 
+            data = train)
+predict5 <- predict(Mod5, test)
+MSE <- mean((predict5 - test$Close)^2)
+MSE
+```
+```{r echo=TRUE}
+#Ajuste y Predicción con el Modelo 8
+Mod8 <- gam(Close ~ ns(Tiempo , df = 11) + bs(Volume, df = 4), 
+            data = train)
+predict8 <- predict(Mod8, test)
+MSE <- mean((predict8 - test$Close)^2)
+MSE
+```
+```{r echo=TRUE}
+#Ajuste y Predicción con el Modelo 12
+Mod12 <- gam(Close ~ gam::s(Tiempo , spar = 0.2) + bs(Volume, df = 4) + 
+            ns(Diferencia, df = 3), data = train)
+predict12 <- predict(Mod12, test)
+MSE <- mean((predict12 - test$Close)^2)
+MSE
+```
+
+Al observar los valores $MSE$ producidos por lo 4 modelos, se decide que el mejor modelo es el número 12 en el cual se ajusta un Smoothing Spline para la covariable Tiempo, spline Cúbico para Volume y Spline Cúbico Natural para la Diferencia.
+
+## d) 
+Intente mejorar el modelo obtenido en el item anterior, utilizando GAMLSS para plantear al menos 4 modelos que expliquen ahora la variabilidad del precio de cierre en función de la fecha, volumen y diferencia. Describa el proceso para plantear dichos modelos.
+
+### Solución
+
+Para la media se utilizara el modelo 12 obtenido en el item anterior como el mejor, para modelar la varaianza se optimizaran las siguientes funciones polinomios, splines cúbicos, splines cúbicos naturales y smoothing splines para la covariable Timepo, para las covariables Volume y Diferecnia solo se optimizaran Splines Cúbicos Naturales y Smoothing Spline, se seleccionara la que menor $MSE$ produzca para las covariabes Volume y Diferencia, para la covariable Tiempo se consideraran las 4 fuciones optimizadas. Luego se ajustaran modelos anidados y se compara en términos del $AIC$.
+
+### Funciones para la variable Tiempo
+
+```{r eval=FALSE, include=FALSE}
+#POLINOMIO
+MSE_poliT <- vector()
+set.seed(1005279662)
+for (i in 1:12){
+  Modelo1 <- gamlssCV(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula =  ~ poly(Tiempo,i), data=datos, 
+                    family = NO(), trace = F, K.fold = 10)
+  MSE_poliT[i] <- Modelo1$CV
+}
+#SPLINE CUBICO
+MSE.bst <- vector()
+set.seed(1005279662)
+for(i in 1:12){
+  glm.fit.bs <- gamlssCV(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula =  ~ bs(Tiempo, df=(3+i)), data = datos,
+                    trace = F, family = NO(), K.fold = 10)
+  MSE.bst[i] <- glm.fit.bs$CV
+}
+#SPLINE CUBICO NATURAL
+MSE.nst<-vector()
+set.seed(1005279662)
+for(i in 1:12){
+  glm.fit.ns <- gamlssCV(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula =  ~ ns(Tiempo, df=(1+i)), data = datos, 
+                    trace =F, family = NO(), K.fold = 10)
+  MSE.nst[i] <- glm.fit.ns$CV
+}
+#SMOOTHING SPLINE 
+MSE.sst <- vector()
+set.seed(1005279662)
+spar1 <- seq(0.1, 1, 0.1)
+for (i in 1:length(spar1)) {
+  glm.fit.ss <- gamlssCV(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula = ~ gam::s(Tiempo, spar = spar1[i]), 
+                    data = datos, trace = F, family = NO(), K.fold = 10)
+  MSE.sst[i] <- glm.fit.ss$CV
+}
+```
+
+```{r echo=FALSE, eval=FALSE, include=FALSE, r,echo=FALSE}
+layout(matrix(c(1,1,2,2,3,3,4,4), 2, 4, byrow = TRUE)) 
+plot(MSE_poliT, xlab="Grado del polinomio", ylab="MSE",type="b",col=4,
+     main = "Polinomio")
+points(x=12, y=6911.677, col = "red", pch = 19)
+
+plot(MSE.bst, type="b", main="Spline Cúbico", col =4, 
+     xlab = "Número de Nodos", ylab = "MSE")
+points(x=12, y=6813.382, col = "red", pch = 19)
+
+plot(MSE.nst,type="b", main="Spline cúbico natural", col = 4, 
+     xlab = "Número de Nodos", ylab = "MSE")
+points(x=12, y=6814.572, col = "red", pch = 19)
+
+plot(spar1, MSE.sst, type="b", main="Smoothing Spline", col = 4, 
+     xlab = "Spar", ylab = "MSE")
+points(x=0.3, y=7661.206, col = "red", pch = 19)
+```
+
+```{r echo=FALSE, fig.align='center', out.width = '70%'}
+knitr::include_graphics("Tiempo.png")
+```
+
+Se observa que para la variable Tiempo se obtiene el menor $MSE$ cuando se ajusta un Spline Cúbico con $12$ nodos para modelar la varianza. 
+
+### Funciones para la variable Volume
+
+```{r eval=FALSE, include=FALSE}
+#SPLINE CUBICO NATURAL
+MSE.nsv <- vector()
+set.seed(1005279662)
+for(i in 1:12){
+  glm.fit.ns <- gamlssCV(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula =  ~ ns(Volume, df=(1+i)), data = datos, 
+                    trace =F, family = NO(), K.fold = 10, 
+                    set.seed = 1005279662)
+  MSE.nsv[i] <- glm.fit.ns$CV
+}
+#SMOOTHING SPLINE 
+MSE.ssv <- vector()
+set.seed(1005279662)
+spar1 <- seq(0.1, 1, 0.1)
+for (i in 1:length(spar1)) {
+  glm.fit.ss <- gamlssCV(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula = ~ gam::s(Volume, spar = spar1[i]), 
+                    data = datos, trace = F, family = NO(), K.fold = 10, 
+                    set.seed = 1005279662)
+  MSE.ssv[i] <- glm.fit.ss$CV
+}
+```
+
+```{r eval=FALSE, include=FALSE}
+layout(matrix(c(1,1,2,2), 2, 2, byrow = F)) 
+plot(MSE.nsv,type="b", main="Spline cúbico natural", col = 4, 
+     xlab = "Número de Nodos", ylab = "MSE")
+points(x=7, y=7660.336, col = "red", pch = 19)
+
+plot(spar1, MSE.ssv, type="b", main="Smoothing Spline", col = 4, 
+     xlab = "Spar", ylab = "MSE")
+points(x=0.3, y=7676.307, col = "red", pch = 19)
+```
+
+```{r echo=FALSE, fig.align='center', out.width = '70%'}
+knitr::include_graphics("Volume.png")
+```
+
+El menor $MSE$ es producido por un Spline Cúbico Natural con $7$ nodos. 
+
+### Funciones para la variable Diferencia
+
+```{r eval=FALSE, include=FALSE}
+#SPLINE CUBICO NATURAL
+MSE.nsd <- vector()
+set.seed(1005279662)
+for(i in 1:12){
+  glm.fit.ns <- gamlssCV(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula =  ~ ns(Diferencia, df=(1+i)), 
+                    data = datos, trace =F, family = NO(), K.fold = 10)
+  MSE.nsd[i] <- glm.fit.ns$CV
+}
+#SMOOTHING SPLINE 
+MSE.ssd <- vector()
+spar1 <- seq(0.1, 1, 0.1)
+set.seed(1005279662)
+for (i in 1:length(spar1)) {
+  glm.fit.ss <- gamlssCV(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula = ~ gam::s(Diferencia, spar = spar1[i]), 
+                    data = datos, trace = F, family = NO(), K.fold = 10)
+  MSE.ssd[i] <- glm.fit.ss$CV
+}
+```
+
+```{r eval=FALSE, include=FALSE}
+layout(matrix(c(1,1,2,2), 2, 2, byrow = F)) 
+plot(MSE.nsd,type="b", main="Spline cúbico natural", col = 4, 
+     xlab = "Número de Nodos", ylab = "MSE")
+points(x=3, y=7655.197, col = "red", pch = 19)
+
+plot(spar1, MSE.ssd, type="b", main="Smoothing Spline", col = 4, 
+     xlab = "Spar", ylab = "MSE")
+points(x=0.9, y=7654.921, col = "red", pch = 19)
+```
+
+```{r echo=FALSE, fig.align='center', out.width = '70%'}
+knitr::include_graphics("Diferencia.png")
+```
+
+El menor $MSE$ es producido por un Smoothing Spline con valor de $Spar = 0.9$.
+
+### Ajuste de Modelos
+
+```{r echo=TRUE}
+#Partiendo de un polinomio de grado 12 para Tiempo
+Modelo1 <- gamlss(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula =  ~ poly(Tiempo,12), data=datos, 
+                    family = NO(), trace = F)
+Modelo2 <- gamlss(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula =  ~ poly(Tiempo,12) + ns(Volume, df=(1+7)),
+                  data=datos, family = NO(), trace = F)
+Modelo3 <- gamlss(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula =  ~ poly(Tiempo,12) + 
+                    ns(Volume, df=(1+7)) + gam::s(Diferencia, spar = 0.9),
+                  data=datos, family = NO(), trace = F)
+c(Modelo1$aic, Modelo2$aic, Modelo3$aic)
+```
+
+El menor $AIC$ lo tiene el modelo número 1, por lo tanto se elige como el mejor de los tres planteados con un polinomio de grado $12$ para la varaible Tiempo.
+
+```{r echo=TRUE}
+#Partiendo de un Spline Cúbico con 15 grados de libertad para Tiempo
+Modelo4 <- gamlss(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula =  ~ bs(Tiempo,df = 15), data=datos, 
+                    family = NO(), trace = F)
+Modelo5 <- gamlss(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula =  ~ bs(Tiempo,df = 15) + 
+                    ns(Volume, df=(1+7)),data=datos, family = NO(), trace = F)
+Modelo6 <- gamlss(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula =  ~ bs(Tiempo,df = 15) + 
+                    ns(Volume, df=(1+7)) + gam::s(Diferencia, spar = 0.9),
+                  data=datos, family = NO(), trace = F)
+c(Modelo4$aic, Modelo5$aic, Modelo6$aic)
+```
+
+El menor $AIC$ lo tiene el modelo número 4, por lo tanto se elige como el mejor de los tres planteados con un Spline Cúbico con $15$ grados de libertad para la variable Tiempo.
+
+```{r echo=TRUE}
+#Partiendo de un Spline Cúbico natural con 13 grados de libertad para Tiempo
+Modelo7 <- gamlss(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula =  ~ ns(Tiempo,df = 13), data=datos, 
+                    family = NO(), trace = F)
+Modelo8 <- gamlss(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula =  ~ ns(Tiempo,df = 13) + 
+                    ns(Volume, df=(1+7)),data=datos, family = NO(), trace = F)
+Modelo9 <- gamlss(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula =  ~ ns(Tiempo,df = 13) + 
+                    ns(Volume, df=(1+7)) + gam::s(Diferencia, spar = 0.9),
+                  data=datos, family = NO(), trace = F)
+c(Modelo7$aic, Modelo8$aic, Modelo9$aic)
+```
+
+El menor $AIC$ lo tiene el modelo número 7, por lo tanto se elige como el mejor de los tres planteados con un Spline Cúbico natural con $13$ grados de libertad para la variable Tiempo.
+
+```{r echo=TRUE}
+#Partiendo de un Smoothing spline con spar=0.3 para Tiempo
+Modelo10 <- gamlss(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula =  ~ gam::s(Tiempo, spar = 0.3),
+                    data=datos,family = NO(), trace = F)
+Modelo11 <- gamlss(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula =  ~ gam::s(Tiempo, spar = 0.3) + 
+                    ns(Volume, df=(1+7)), data=datos, family = NO(), 
+                    trace = F)
+Modelo12 <- gamlss(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula =  ~ gam::s(Tiempo, spar = 0.3) + 
+                    ns(Volume, df=(1+7)) + gam::s(Diferencia, spar = 0.9),
+                  data=datos, family = NO(), trace = F)
+c(Modelo10$aic, Modelo11$aic, Modelo12$aic)
+```
+
+El menor $AIC$ lo tiene el modelo número 11, por lo tanto se elige como el mejor de los tres planteados, este involucra un Smoothing spline con $spar=0.3$ para la variable Tiempo y un Spline Cúbico Natural para la variable Volume con $8$ grados de libertad.
+
+En general, para los modelos del $1$ al $9$ las variables Volume y Diferencia no tienen efectos sobre el modelamiento de la varianza de Close.
+
+Por tanto los 4 modelos propuestos son:
+
+- Close ~ gam::s(Tiempo , spar = 0.2) + bs(Volume, df = 4) + ns(Diferencia, df = 3), sigma.formula =  ~ poly(Tiempo,12).
+
+- Close ~ gam::s(Tiempo , spar = 0.2) + bs(Volume, df = 4) + ns(Diferencia, df = 3), sigma.formula =  ~ bs(Tiempo,df = 15).
+
+- Close ~ gam::s(Tiempo , spar = 0.2) + bs(Volume, df = 4) + ns(Diferencia, df = 3), sigma.formula =  ~ ns(Tiempo,df = 13).
+
+-  Close ~ gam::s(Tiempo , spar = 0.2) + bs(Volume, df = 4) + ns(Diferencia, df = 3), sigma.formula =  ~ gam::s(Tiempo, spar = 0.3) + ns(Volume, df=(1+7)).
+
+
+## e) 
+
+Entre los modelos ajustados en el item anterior, seleccione el mejor utilizando CV.
+
+### Solución 
+
+Se usara el año $2018$ como conjunto de validación.
+
+```{r echo=TRUE}
+#Ajuste y Predicción con el Modelo 1
+Modelo1 <- gamlss(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula =  ~ poly(Tiempo,12), data=train, 
+                    family = NO(), trace = F)
+predict1 <- predict(Modelo1, newdata = test, type = "response")
+MSE <- mean((predict1 - test$Close)^2)
+MSE
+```
+
+```{r echo=TRUE}
+#Ajuste y Predicción con el Modelo 4
+Modelo4 <- gamlss(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula =  ~ bs(Tiempo,df = 15), data=train, 
+                    family = NO(), trace = F)
+predict4 <- predict(Modelo4, newdata = test, type ="response")
+MSE <- mean((predict4 - test$Close)^2)
+MSE
+```
+
+```{r echo=TRUE}
+#Ajuste y Predicción con el Modelo 7
+Modelo7 <- gamlss(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula =  ~ ns(Tiempo,df = 13), data=train, 
+                    family = NO(), trace = F)
+predict7 <- predict(Modelo7, newdata = test, type = "response")
+MSE <- mean((predict7 - test$Close)^2)
+MSE
+```
+
+```{r echo=TRUE}
+#Ajuste y Predicción con el Modelo 11
+Modelo11 <- gamlss(formula = Close ~ gam::s(Tiempo , spar = 0.2) +
+                    bs(Volume, df = 4) + ns(Diferencia, df = 3),
+                    sigma.formula =  ~ gam::s(Tiempo, spar = 0.3) + 
+                    ns(Volume, df=(1+7)), data=train, family = NO(), 
+                    trace = F)
+predict11 <- predict(Modelo11, newdata = test, type = "response")
+MSE <- mean((predict11 - test$Close)^2)
+MSE
+```
+
+Al evaluar con validación cruzada los modelos propuestos, se decide que el mejor modelo es el número $11$ ya que posee el menor valor de $MSE$. Pero aún asi no es menor al valor obtenido con el modelo número $12$ del item anterior, en el cual no se modela la varianza. 
+
+En general, por principio de parsimonia y valor de $MSE$ el modelo que se propone como óptimo para modelar el precio de cierre de las acciones de la compañía APPLE es:
+
+Close ~ gam::s(Tiempo , spar = 0.2) + bs(Volume, df = 4) + ns(Diferencia, df = 3).
+
+

@@ -1,0 +1,26 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1605215555236.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3658222623",
+    "id" : "37DA6581",
+    "lastKnownWriteTime" : 1605239934,
+    "last_content_update" : 1605239934389,
+    "path" : "C:/Users/PC/Google Drive/Universidad Nacional de Colombia/12. Doceavo semestre/Introducción a la Analítica/3. Modulo 3/Tarea_1/CódigoR.R",
+    "project_path" : "CódigoR.R",
+    "properties" : {
+        "cursorPosition" : "19,28",
+        "scrollLine" : "2",
+        "tempName" : "Untitled1"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

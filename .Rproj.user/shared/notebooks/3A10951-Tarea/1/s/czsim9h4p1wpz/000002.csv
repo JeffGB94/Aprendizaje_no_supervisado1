@@ -1,0 +1,3 @@
+"0","set.seed(123)"
+"0","muestra <- sample(1:nrow(datos), size = floor(nrow(datos) * 0.7))"
+"0","train <- datos[muestra, ]; test <- datos[-muestra, ]"
