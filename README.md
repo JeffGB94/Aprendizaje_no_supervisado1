@@ -2,7 +2,7 @@
 
 Este trabajo consisten en el uso de aprendizaje no supervisado, utilizando como data sets principal las que suministra el texto "Introduction to Analytical Learning with R" de Gareth James, Daniela Witten, Trevor Hastie y Robert Tibshirani.
 
-##Preguntas a desarrollar
+## Preguntas a desarrollar
 
 1. En este ejercicio se utilizarán arboles de regresión para predecir los valores de la variable *sales* en la base de datos *Carseats* de la libreria *ISLR*, tratando dicha variable como continua:
 
