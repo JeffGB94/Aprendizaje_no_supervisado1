@@ -44,37 +44,37 @@ Un marco de datos con 400 observaciones sobre las siguientes 11 variables.
 
 **Descripción de las variables**
 
-*Sales*
+* *Sales*
 Ventas unitarias (en miles) en cada ubicación
 
-*CompPrice*
+* *CompPrice*
 Precio cobrado por la competencia en cada ubicación
 
-*Income*
+* *Income*
 Nivel de ingresos de la comunidad (en miles de dólares)
 
-*Advertising*
+* *Advertising*
 Presupuesto de publicidad local para la empresa en cada ubicación (en miles de dólares)
 
-*Population*
+* *Population*
 Tamaño de la población en la región (en miles)
 
-*Price*
+* *Price*
 Precio que cobra la empresa por los asientos de seguridad en cada sitio
 
-*ShelveLoc*
+* *ShelveLoc*
 Un factor con niveles Malo, Bueno y Medio que indica la calidad de la ubicación de las estanterías para los asientos del automóvil en cada sitio.
 
-*Age*
+* *Age*
 Edad media de la población local
 
-*Education*
+* *Education*
 Nivel de educación en cada ubicación
 
-*Urban*
+* *Urban*
 Un factor con niveles No y Sí para indicar si la tienda está en una ubicación urbana o rural.
 
-*US*
+* *US*
 Un factor con niveles No y Sí para indicar si la tienda está en EE. UU. O no
 
 ## 1.a)
