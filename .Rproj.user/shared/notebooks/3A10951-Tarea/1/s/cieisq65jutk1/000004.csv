@@ -1,0 +1,6 @@
+"0","MSE4 <- mean((test$Sales - predict(rf.Reg, newdata = test))^2); MSE4
+"
+"1","[1]"
+"1"," 2.625467"
+"1","
+"

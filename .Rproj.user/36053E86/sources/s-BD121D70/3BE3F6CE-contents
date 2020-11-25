@@ -1,0 +1,608 @@
+---
+title: "Trabajo 1"
+author: "Daniel Betancur, Edwin Caicedo, Natalia Ramirez"
+date: "24/03/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(ISLR)
+require(knitr)
+library(caret)
+require(e1071)
+require(ggplot2)
+library(ROCR)
+library(pROC)
+library(tree)
+library(MASS)
+library(randomForest)
+library(gbm)
+library(ggplot2)
+library(tidyverse)
+library(parallel)
+library(future.apply)
+require(gridExtra)
+```
+
+$$\textbf{Trabajo Arboles de Decisión - SVMs.}$$
+
+\section*{Punto 1}
+
+Considere el índice de Gini, el error de clasificación y la entropía en el contexto de una clasificación simple con dos clases. Cree un único *plot* que muestre cada una de estas cantidades en función de $\hat{p}_{m1}$. El eje *x* debe corre sobre los valores de $\hat{p}_{m1}$ que va desde cero, hasta uno. Y el eje *y* debe mostrar el índice de Gini, el error de clasificacón y la entropía. Compare las curvas, alguna conclusión?
+
+*Sugerencia* enun entorno con dos clases $\hat{p}=1-\hat{p}_{m2}$. realice las curvas en *R*.
+
+\textbf{Solución}
+
+$$\textbf{Error de clasificación}$$
+$$E=1- \max\limits_{k}(\hat{p}_{mk})$$
+
+$\hat{p}_{mk}$: Proporción de observaciones de entrenamiento en la $m-ésima$ región que corresponde a la $k-ésima$ clase.
+
+$$\textbf{Índice de Gini}$$
+$$G=\sum^{k}_{k=1}\hat{p}_{mk}(1-\hat{p}_{m2})$$
+
+$$\textbf{Entropía}$$
+$$D=-\sum^{k}_{k=1}\hat{p}_{m2} log(\hat{p}_{mk})$$
+
+*Para este caso*
+
+$k=2$, y cada observación en la $m-ésima$ región solo puede portenecer a una de 2 clases. Los índices son:
+
+$$E=1- \max\limits_{k}(\hat{p}_{mk})=1-max\{\hat{p}_{m1},1-\hat{p}_{m2} \}$$
+
+$$G=\sum^{k}_{k=1}\hat{p}_{mk}(1-\hat{p}_{m2})=\hat{p}_{m1}(1-\hat{p}_{m1})+(1-\hat{p}_{m1})=2\hat{p}_{m1}(1-\hat{p}_{m1})$$
+
+$$D=-\sum^{k}_{k=1}\hat{p}_{m2} log(\hat{p}_{mk})=-\left( \hat{p}_{mk} log(\hat{p}_{mk}) + (1-\hat{p}_{mk})_k log(1-\hat{p}_{mk}) \right)$$
+
+Asi se ajustan las funciones en R:
+
+```{r}
+# Función del error de clasificación
+E <- Vectorize(function(p.m1){
+  return(1 - max(p.m1, 1 - p.m1))
+})
+
+# Función del indice Gini
+G <- Vectorize(function(p.m1){
+  return(2*p.m1*(1-p.m1))
+})
+
+# Función de la Entropía
+D <- Vectorize(function(p.m1){
+  return(-(p.m1*log(p.m1)+(1-p.m1)*log(1-p.m1)))
+})
+
+```
+
+```{r, echo=FALSE}
+# Vectores de valores de p.m1 y los índices
+
+p.m1 <- seq(0, 1, by = 0.01)
+Error <- E(p.m1)
+Gini <- G(p.m1)
+Entropia <- D(p.m1)
+
+# Base de datos apra gráficar
+Indices <- data.frame(Pm1 = p.m1, Error = Error, Gini = Gini, Entropia = Entropia)
+
+df <- Indices %>%
+  gather(key = "variable", value = "value", -Pm1)
+```
+
+
+y se genera el siguiente gráfico:
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, out.width='50%', fig.align="center"}
+# Creando gráfico
+theme_set(theme_minimal())
+ggplot(df, aes(x = Pm1, y = value)) + 
+  geom_line(aes(color = variable, linetype = variable), size = 1.5) + 
+  scale_color_manual(values = c("darkred", "steelblue", "darkgreen"))
+```
+
+
+Déspues se evidencia que los índices de entropía y Gini son mas sencibles a variaciones de $\hat{p}_{mk}$ que el error de clasificación ademas de presentar un comportamiento suave y diferenciable al contrario del error de clasificación . La metrica mas sencible es la entropía.
+
+\section*{Punto 2}
+
+Ahora se va a utilizar *boosting* para predecir la variable *Salary* en el conjunto de datos *Hitters* (libreria *ISLR*)
+
+
+\textbf{a).} Elimine las observaciones para las que falta el correspondiente valor de *Salary*. Luego aplique transformación logaritmica $ln(x)$.
+
+\textbf{Solución}
+
+```{r, echo=FALSE}
+data(Hitters)
+# Obteniendo indices de los NA's
+NA.ind <- which(is.na(Hitters$Salary))
+# Eliminando observaciones con Salary NA
+Hitt <- Hitters[-NA.ind,]
+# Aplicando transformación logarítmica
+Hitt$Salary %>% log() -> Hitt$Salary
+```
+
+La variable *Salary* tiene 59 valores faltantes, lo cual representa un $18.32\%$ de las observaciones.
+
+\textbf{b).} Cree un conjunto de entrenamiento que conste de las primeras 200 observaciones, y un conjunto de prueba que conste de las observaciones restantes.
+
+\textbf{Solución}
+
+
+```{r}
+# Indices de las primeras 200 observaciones
+train <- 1:200
+# Datos de entrenamiento
+Hitt.train <- Hitt[train, ]
+# Datos de prueba
+Hitt.test <- Hitt[-train, ]
+```
+
+
+\textbf{c).} Aplique boosting sobre el conjunto de entrenamiento con 1000 árboles para un rango de valores del parámetro de contracción (shrinkage) $\lambda$. Obtenga una gráfica con distintos valores del parámetro de contracción $\lambda$ en el eje *x* y el correspondiente *MSE* en el conjunto de entrenamiento en el eje *y*.
+
+\textbf{Solución}
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, out.width='50%', fig.align="center"}
+# Creando rejilla para el parámetro de contracción
+shrinkage <- seq(0, 1, by = 0.001)
+
+# Estableciendo parametros de la paralelización
+cores <- detectCores()
+plan(multiprocess, workers = cores)
+
+# Guardando los distintos MSE al aplicar el modelo
+MSE <- unlist(future_lapply(shrinkage, function(x){
+  
+  set.seed(75508822)
+  Hitt.boost <- gbm(Salary ~ ., data = Hitt.train, distribution = "gaussian", 
+                    n.trees = 1000, shrinkage = x)
+  Salary.fitted <- Hitt.boost$fit
+  return(mean((Hitt.train$Salary - Salary.fitted)^2))
+}))
+
+# Gráficando el MSE contra el parámetro de contracción
+df.1 <- data.frame(Shrinkage = shrinkage, MSE = MSE)
+
+ggplot(data = df.1, aes(x = shrinkage, y = MSE)) +
+  geom_line(col = "steelblue") +
+  geom_vline(xintercept = shrinkage[which.min(MSE)], linetype = "dashed", col = "darkred")
+```
+
+Del gráfico anterior se observa que el valor (shrinkage) $\lambda$ que reduce el *MSE* en los datos de entrenamiento es $0.979$.
+
+\textbf{d).} Obtenga una gráfica con distintos valores del parámetro de contracción $\lambda$ en el eje *x* y el correspondiente *MSE* en el conjunto de prueba en el eje *y*.
+
+\textbf{Solución}
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, out.width='50%', fig.align="center"}
+# Guardando los distintos MSE al aplicar el modelo
+MSE.test <- unlist(future_lapply(shrinkage, function(x){
+  
+  set.seed(75508822)
+  Hitt.boost <- gbm(Salary ~ ., data = Hitt.train, distribution = "gaussian", 
+                    n.trees = 1000, shrinkage = x)
+  Salary.pred <- predict(Hitt.boost, newdata = Hitt.test, n.trees = 1000)
+  return(mean((Hitt.test$Salary - Salary.pred)^2))
+}))
+
+# Gráficando el MSE contra el parámetro de contracción
+df.2 <- data.frame(Shrinkage = shrinkage, MSE = MSE.test)
+ggplot(data = df.2, aes(x = shrinkage, y = MSE)) +
+  geom_line(col = "steelblue") +
+  geom_vline(xintercept = shrinkage[which.min(MSE.test)], linetype = "dashed", col = "darkred")
+```
+
+Del gráfico anterior se observa que el valor (shrinkage) $\lambda$ que reduce el *MSE* en los datos de entrenamiento es $0.039$
+
+\textbf{e).}  Compare el *MSE* de prueba del modelo boosting con el *MSE* de prueba que resulta de aplicar un modelo de regresión lienal simple. 
+
+\textbf{Solución}
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, out.width='50%', fig.align="center"}
+# Creando modelo de regresión y su MSE
+Hitt.reg <- lm(Salary ~ ., data = Hitt.train)
+pred.lm <- predict(Hitt.reg, newdata = Hitt.test)
+MSE.reg <- mean((Hitt.test$Salary - pred.lm)^2)
+
+# MSE con mejor valor de shrinkage
+best.shrinkage <- shrinkage[which.min(MSE.test)]
+set.seed(75508822)
+Hitt.boost <- gbm(Salary ~ ., data = Hitt.train, distribution = "gaussian", 
+                  n.trees = 1000, shrinkage = best.shrinkage)
+Salary.pred <- predict(Hitt.boost, newdata = Hitt.test, n.trees = 1000)
+MSE.boost <- mean((Hitt.test$Salary - Salary.pred)^2)
+
+```
+Para el modelo de regresón lineal multiple se obtiene un *MSE de prueb* igaul a $0.4917959$, y para el modelo boosting se obtiene un *MSE de prueba* igual a $0.2526389$, se concluye que el mejor ajuste se obtine con el modelo boosting.
+
+\textbf{f).} ¿Qué variables parecen ser los predictores más importantes en el modelo *boosted*?.
+
+
+\textbf{Solución}
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, out.width='50%', fig.align="center"}
+summary(Hitt.boost)
+```
+
+De acuerdo con la medida de influencia relativa las variables mas importantes son *CAtBat*: Número de veces al bate durante su carrera y *CHits*: Número de Hits durante su carrera.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width=3, fig.height=3, fig.show='hold', fig.align='center'}
+# plots de las variables más importantes
+par(mfrow=c(1,2))
+plot(Hitt.boost, i="CAtBat")
+plot(Hitt.boost, i="CHits")
+par(mfrow=c(1,1))
+```
+
+
+De lo anterior se puede concluir que a medida *CAtBat* y *CHits* aumente el log del salario de los jugadores también aumentará.
+
+\textbf{g).} Ahora aplique *bagging* al conjunto de entrenamiento. ¿Cuál es el *MSE* en el conjunto de prueba para este enfoque?.
+
+\textbf{Solución}
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, out.width='50%', fig.align="center"}
+set.seed(7550822)
+Hitt.bag <- randomForest(Salary ~ ., data = Hitt.train, mtry = ncol(Hitt.train) - 1, 
+                           importance = T, ntree = 1000)
+
+yhat.bag <- predict(Hitt.bag, newdata = Hitt.test)
+mean((Hitt.test$Salary - yhat.bag)^2)
+
+# En este caso resulta menor el error de entrenamiento utilindo bagging
+
+set.seed(7550822)
+Hitt.rf <- randomForest(Salary ~ ., data = Hitt.train, mtry = sqrt(ncol(Hitt.train)), 
+                         importance = T, ntree = 10000)
+
+yhat.rf <- predict(Hitt.rf, newdata = Hitt.test)
+mean((Hitt.test$Salary - yhat.rf)^2) # Aún mejorcito
+```
+Para los datos de entrenamiento con el modelo *bagging* se obtiene un *MSE* de $0.2290425$, y con los datos de prueba se obtiene un $MSE$ de $0.2127445$. 
+
+
+\section*{Punto 3} 
+
+En este ejercicio, se utilizará el enfoque de máquinas de soporte vectorial para predecir si un automóvil determinado posee un alto o bajo consumo de combustible basado en el conjunto de datos Auto (librería *ILSR*).
+
+\textbf{a).} Cree una variable binaria que tome un 1 para automóviles con millaje por galón por encima de la mediana, y un 0 para automóviles con millaje por debajo de la mediana.
+
+\textbf{Solución}
+
+La base de datos "Auto" contiene kilometraje de gasolina, caballos de fuerza y otra información para 392 vehículos. Esta base contiene 392 observaciones sobre las siguientes 9 variables:
+
+* **mpg**: millas por galón.
+
+* **cylinders:** Número de cilindros entre 4 y 8.
+
+* **displacement:** Desplazamiento del motor (pulgadas cúbicas).
+
+* **horsepower:** Caballos de fuerza del motor.
+
+* **weight:** Peso del vehículo (libras).
+
+* **acceleration:** Tiempo para acelerar de 0 a 60 mph (seg.)
+
+* **year:** Año modelo (módulo 100)
+
+* **origin:** Origen del automóvil (1. Estadounidense, 2. Europeo, 3. Japonés)
+
+- **nombre:** Nombre del vehículo
+
+
+```{r, echo=FALSE, include=FALSE, message=FALSE}
+data(Auto)
+mediana <- median(Auto$mpg)
+Auto$c_mpg <- as.factor(ifelse(Auto$mpg<mediana, 0, 1))
+prop.table(table(Auto$c_mpg))*100
+```
+
+Los datos originales contenían 408 observaciones, pero se eliminaron 16 observaciones con valores faltantes lo que representa un $3.4\%$. La mediana de millas por galon es de $22.7$5 y las proporción de las categorias  de la nueva variable es de $50\%$.
+
+
+\textbf{b).} Ajuste un clasificador de vectores de soporte a los datos con varios valores del parámetro $cost$ para predecir si un automóvil posee millaje alto o bajo. Informe los errores de validación cruzada asociados con diferentes valores de este parámetro. Comente sobre sus resultados.
+
+\textbf{Solución}
+
+Para poder realizar una clasificación de vectores de soporte, es necesario utilizar el paquete *e1071*, gracias a esta se ajusta el clasificador de soporte con la función de R $smv()$ y para poder realizar validación cruzada para encontrar el valor óptimo de $cost$ se usa la función de R $turn()$
+
+A continuación se separa la base de datos en datos de entrenamiento y de prueba.
+
+```{r, message=FALSE, warning=FALSE, out.width='60%', fig.align="center"}
+set.seed(123456)
+train <- createDataPartition(y = Auto$c_mpg, p = 0.75, list = FALSE, times = 1)
+datos_train<- Auto[train, ]
+datos_test<- Auto[-train, ]
+```
+
+Para poder ajustar el clasificador de vectores de soporte se elige un kernel *lineal*. Y es necesario determinar un rango con diferentes valores para *cost* para poder realizar la validación cruzada.
+
+```{r, message=FALSE, warning=FALSE, out.width='50%', fig.align="center"}
+set.seed(123456)
+tune.out <- tune(svm, c_mpg~., data=datos_train ,kernel ="linear", 
+                 ranges=list(cost=c(0.001 , 0.01, 0.1, 1, 5, 10,100)))
+```
+
+Para acceder a los errores de validación cruzada para cada uno de estos modelos, se hace por medio se de funcion de R $summary()$
+
+```{r,message=FALSE, echo=FALSE, warning=FALSE}
+summary(tune.out)
+```
+
+Se puede observar que con $cost=1$ proporciona el menor error de validación cruzada. Ahora, se debe ajustar el mejor modelo con $cost=1$, así como se muestra a continuación:  
+
+```{r, message=F, warning=F, echo=FALSE}
+bestmod <- tune.out$best.model
+summary(bestmod)
+```
+
+Después de ajustar el mejor modelo se obtiene que hay 44 vectores de soporte, 21 para la clase 0 (automóviles con millaje bajo) y 23 para la clase 1 (automóviles con millaje alto).
+
+Ahora se predicen las etiquetas de clase de las observaciones de prueba creadas anteriomente, para el mejor modelo usando validación cruzada. 
+
+```{r, message=F, warning=F, echo=FALSE}
+set.seed(123446)
+ypred <- predict(bestmod ,datos_test)
+matriz <- table(predict =ypred , datos_test$c_mpg)
+error_test <- 1-(sum(diag(matriz))/sum(matriz))
+kable(matriz,align = "l")
+error_test
+```
+
+Finalmente se puede concluir que con valor asignado a $cost=1$, 97 de las observaciones se han clasificado de forma correcta, tan solo 1 observación quedó mal clasificada y por lo tanto el error de clasificaión de prueba es del $1\%$.
+
+
+\textbf{c).} Ahora repita *b*, esta vez utilizando *SVMs* con una base de kernels radiales y polinomiales, con diferentes valores de $gamma$ o $degree$ según el kernel y cost. comente sus resultados.
+
+\textbf{Solución}
+
+Para realizar una clasificación de vectores de soporte, con kernels radiales y polinomiales. Se deben ajustar varios modelos por medio de validación cruzada, de este modo se encuentra el valor óptimo para $cost$ y $gamma$ que permiten minimizar el error de validación.
+
+$$\textbf{Kernell Radial}$$
+
+```{r, message=F, warning=F, echo=FALSE}
+set.seed(123456)
+tune.out_r <- tune(svm, c_mpg ~ ., data = datos_train, 
+               kernel = "radial", 
+               ranges = list(cost = c(0.1, 1, 10,100,1000), 
+                             gamma = c(0.5,1,2,3,4)))
+
+summary(tune.out_r)
+```
+
+Se encontró que los parámetros que minimizan el error es $cost=10$ y $gamma=1$. Ahora, se debe ajustar el mejor modelo con $cost=10$ y $gamma=1$, así como se muestra a continuación:  
+
+```{r,message=F, echo=FALSE, warning=F}
+bestmod_r = tune.out_r$best.model
+summary(bestmod_r)
+bestmod_r$gamma
+```
+
+Después de realizar el mejor modelo se obtiene que hay 287 vectores de soporte, 142 para la clase 0 (automóviles con millaje bajo) y 145 para la clase 1 (automóviles con millaje alto), con un valor $gamma=1$. Ahora se predicen las etiquetas de clase de las observaciones de prueba creadas anteriomente, para el mejor modelo usando validación cruzada. 
+
+```{r,message=F,warning=F, echo=FALSE}
+set.seed(123456)
+ypred_r <- predict(bestmod_r ,datos_test)
+matriz_r <- table(predict =ypred_r , datos_test$c_mpg)
+kable(matriz_r,align = "l")
+
+error_test_r <- 1-(sum(diag(matriz_r))/sum(matriz_r))
+error_test_r
+```
+
+Finalmente se puede concluir que con valor asignado a $cost=10$ y $gamma=1$, 91 de las observaciones se han clasificado de forma correcta, 7 de ellas quedaron mal clasificada y por lo tanto el error de clasificaión de prueba es del $7.14\%$. 
+
+$$\textbf{Kernel Polinomial}$$
+
+```{r,message=F, warning=F, echo=FALSE}
+set.seed(123456)
+tune.out_p <- tune(svm, c_mpg ~ ., data = datos_train, 
+               kernel = "polynomial", 
+               ranges = list(cost = c(0.001,0.01, 0.1, 1, 10,100), 
+                             degree = c(2, 3, 4)), 
+               scale = F)
+
+summary(tune.out_p)
+```
+
+Se encontró que los parámetros que minimizan el error es $cost=0.01$ y $gamma=2$. Ahora, se debe ajustar el mejor modelo con $cost=10$ y $gamma=1$, así como se muestra a continuación: 
+
+```{r, message=F, warning=F, echo=FALSE}
+bestmod_p = tune.out_p$best.model
+summary(bestmod_p)
+bestmod_p$degree
+```
+
+Después de realizar el mejor modelo se obtiene que hay 15 vectores de soporte, 6 para la clase 0 (automóviles con millaje bajo) y 9 para la clase 1 (automóviles con millaje alto), con un valor $degree=2$. Ahora se predicen las etiquetas de clase de las observaciones de prueba creadas anteriomente, para el mejor modelo usando validación cruzada. 
+
+```{r,message=F,warning=F, echo=FALSE}
+set.seed(123456)
+ypred_p = predict(bestmod_p ,datos_test)
+matriz_p <-table(predict =ypred_p , datos_test$c_mpg)
+kable(matriz_p,align = "l")
+
+error_test_p <- 1-(sum(diag(matriz_p))/sum(matriz_p))
+error_test_p
+```
+
+Finalmente se puede concluir que con valor asignado a $cost=0.01$ y $degree=2$, 97 de las observaciones se han clasificado de forma correcta, tan solo 1 observación quedó mal clasificada y por lo tanto el error de clasificaión de prueba es del $1.02\%$. Siendo este el mejor modelo para cla clasificación del millaje de automoviles.
+
+
+\textbf{d).} Realice algunos plots que sirvan de apoyo a sus afirmaciones en (b) y (c). Recomendación: En el lab, se utilizó la función *plot* para objetos svm solo en casos con $p = 2$. Cuando $p>2$, se puede utilizar la función *plot* para crear gráficos que muestran pares de variables a la vez. Esencialmente, en lugar de escribir
+
+$plot(svmfit,dat)$
+
+donde *svmfit* contiene el modelo ajustado y dat es un dataframe que contiene los datos, se puede utilizar
+
+$plot(svmfit, dat, x_1 \sim x_4)$
+
+para graficar solo las variables primera y cuarta. Sin embargo, se debe reemplazar $x_1$ y $x_4$ con los nombres correctos de las variables. Se puede encontrar más información, escribiendo *?plot.svm*.
+
+\textbf{Solución}
+
+Para graficar solo las variables primera y cuarta. Sin embargo, se debe reemplazar $x_1$ y $x_4$ con los nombres correctos de las variables. Se puede encontrar más información, escribiendo $plot.svm$.
+
+$$\textbf{Clasificador de vectores de soporte}$$
+
+En la siguiente gráfica se observa que el $cost$ que minimiza el error es $cost=1$.
+
+```{r, echo=FALSE, echo=FALSE, message=FALSE, out.width='50%', fig.align="center"}
+ggplot(data = tune.out$performances, aes(x = cost, y = error)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Error de validación ~ hiperparámetro Cost") +
+  theme_bw() + theme(plot.title = element_text(hjust = 0.5))
+```
+
+A continuación se verifican si las dos clases son completamente separables.
+
+```{r, echo=FALSE, message=FALSE, fig.width=6, fig.height=5, fig.show='hold', out.width='50%'}
+par(mfrow=c(2,2))
+plot(bestmod,datos_train,displacement~horsepower)
+plot(bestmod,datos_train,displacement~weight)
+plot(bestmod,datos_train,displacement~acceleration)
+plot(bestmod,datos_train,displacement~year)
+par(mfrow=c(1,1))
+```
+
+
+```{r, echo=FALSE, message=FALSE, fig.width=6, fig.height=5, fig.show='hold', out.width='50%'}
+par(mfrow=c(2,2))
+plot(bestmod,datos_train,horsepower~weight)
+plot(bestmod,datos_train,horsepower~acceleration)
+plot(bestmod,datos_train,horsepower~year)
+plot(bestmod,datos_train,weight~acceleration)
+par(mfrow=c(1,1))
+```
+
+
+```{r, echo=FALSE, message=FALSE, fig.width=6, fig.height=5, fig.show='hold', out.width='50%'}
+par(mfrow=c(1,2))
+plot(bestmod,datos_train,weight~year)
+plot(bestmod,datos_train,acceleration~year)
+par(mfrow=c(1,1))
+```
+
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE, out.width='50%', fig.align="center"}
+fitted = attributes(predict (bestmod ,datos_train, decision.values =TRUE))$decision.values
+fitted.t = attributes(predict (bestmod ,datos_test, decision.values =TRUE))$decision.values
+
+par(mfrow=c(1,2))
+plot.roc(datos_train[,"c_mpg"], fitted,main="Curva ROC Training")
+plot.roc(datos_test[,"c_mpg"], fitted.t,main="Curva ROC Test")
+par(mfrow=c(1,1))
+```
+
+En los gráficos presentados anteriormente se puede concluir que las observaciones no son completamente separables, se ajustó el clasificador de soporte vectorial con un kernel lineal, donde la región del espacio de atributos que se asignó fue a la clase -1 que se muestra en amarillo claro. Recordar que se obtuvo que el valor óptimo de cost=1, con 44 vectores de soporte, lo que indica que la margen es ancha y muchos vectores de soporte estaran sobre la margen o la violan. Finalmente por medio de las curvas ROC a pesar de que los datos no son completamente separables, el clasificador de soporte se ajusta bien a los datos. 
+
+$$\textbf{SVM Kernell radial}$$
+
+En la siguiente gráfica se observa que el $cost$ que minimiza el error es $cost=10$ y $gamma=1$.
+
+```{r, echo=FALSE, echo=FALSE, message=FALSE, out.width='50%', fig.align="center"}
+ggplot(data = tune.out_r$performances, aes(x = cost, y = error,col = as.factor(gamma))) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Error de validación ~ hiperparámetro C y polinomio") +
+  theme_bw() + theme(plot.title = element_text(hjust = 0.5))+theme_bw() + theme(legend.position = "bottom")
+```
+
+
+```{r, echo=FALSE, message=FALSE, fig.width=6, fig.height=5, fig.show='hold', out.width='50%'}
+par(mfrow=c(2,2))
+plot(bestmod_r,datos_train,displacement~horsepower)
+plot(bestmod_r,datos_train,displacement~weight)
+plot(bestmod_r,datos_train,displacement~acceleration)
+plot(bestmod_r,datos_train,displacement~year)
+par(mfrow=c(1,1))
+```
+
+
+```{r, echo=FALSE, message=FALSE, fig.width=6, fig.height=5, fig.show='hold', out.width='50%'}
+par(mfrow=c(2,2))
+plot(bestmod_r,datos_train,horsepower~weight)
+plot(bestmod_r,datos_train,horsepower~acceleration)
+plot(bestmod_r,datos_train,horsepower~year)
+plot(bestmod_r,datos_train,weight~acceleration)
+par(mfrow=c(1,1))
+```
+
+
+```{r, echo=FALSE, message=FALSE, fig.width=6, fig.height=5, fig.show='hold', out.width='50%'}
+par(mfrow=c(1,2))
+plot(bestmod_r,datos_train,weight~year)
+plot(bestmod_r,datos_train,acceleration~year)
+par(mfrow=c(1,1))
+```
+
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE, out.width='50%', fig.align="center"}
+fitted3 = attributes(predict (bestmod_r ,datos_train, decision.values =TRUE))$decision.values
+fitted.t3 = attributes(predict (bestmod_r ,datos_test, decision.values =TRUE))$decision.values
+
+par(mfrow=c(1,2))
+plot.roc(datos_train[,"c_mpg"],fitted3,main="Curva ROC Training")
+plot.roc(datos_test[,"c_mpg"],fitted.t3,main="Curva ROC Test")
+par(mfrow=c(1,1))
+```
+
+En los gráficos presentados anteriormente se puede concluir que las observaciones no son completamente separables, se ajustó el clasificador de soporte vectorial con un kernel radial, donde la región del espacio de atributos que se asignó fue a la clase +1 que se muestra en purpura. Recordar que se obtuvo que el valor óptimo de cost=10 siendo grande, con 287 vectores de soporte, lo que indica que la margen es más estrecha y habrán pocos vectores de soporte que violen la margen. Finalmente a partir de las curvas ROC se observa que se produce mayor error de test, lo que indica que no es tan buen clasificador. 
+
+$$\textbf{SVM Kernell Polinomial}$$
+
+En la siguiente gráfica se observa que el cost que minimiza el error es cost=0.01 y degree=2.
+
+```{r, echo=FALSE, echo=FALSE, message=FALSE, out.width='50%', fig.align="center"}
+ggplot(data = tune.out_p$performances, aes(x = cost, y = error,col = as.factor(degree))) +
+geom_line() +
+geom_point() +
+labs(title = "Error de validación ~ hiperparámetro C y polinomio") +
+theme_bw() + theme(plot.title = element_text(hjust = 0.5))+theme_bw() + theme(legend.position = "bottom")
+```
+
+
+```{r, echo=FALSE, message=FALSE, fig.width=6, fig.height=5, fig.show='hold', out.width='50%'}
+par(mfrow=c(2,2))
+plot(bestmod_p,datos_train,displacement~horsepower)
+plot(bestmod_p,datos_train,displacement~weight)
+plot(bestmod_p,datos_train,displacement~acceleration)
+plot(bestmod_p,datos_train,displacement~year)
+par(mfrow=c(1,1))
+```
+
+
+```{r, echo=FALSE, message=FALSE, fig.width=6, fig.height=5, fig.show='hold', out.width='50%'}
+par(mfrow=c(2,2))
+plot(bestmod_p,datos_train,horsepower~weight)
+plot(bestmod_p,datos_train,horsepower~acceleration)
+plot(bestmod_p,datos_train,horsepower~year)
+plot(bestmod_p,datos_train,weight~acceleration)
+par(mfrow=c(1,1))
+```
+
+
+```{r, echo=FALSE, message=FALSE, fig.width=6, fig.height=5, fig.show='hold', out.width='50%'}
+par(mfrow=c(1,2))
+plot(bestmod_p,datos_train,weight~year)
+plot(bestmod_p,datos_train,acceleration~year)
+par(mfrow=c(1,1))
+```
+
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE, out.width='50%', fig.align="center"}
+fitted2 = attributes(predict (bestmod_p ,datos_train, decision.values =TRUE))$decision.values
+fitted.t2 = attributes(predict (bestmod_p ,datos_test, decision.values =TRUE))$decision.values
+
+par(mfrow=c(1,2))
+plot.roc(datos_train[,"c_mpg"],fitted2,main="Curva ROC Training")
+plot.roc(datos_test[,"c_mpg"],fitted.t2,main="Curva ROC Test")
+par(mfrow=c(1,1))
+```
+
+En los gráficos presentados anteriormente se puede concluir que las observaciones no son completamente separables, se ajustó el clasificador de soporte vectorial con un kernel polinomial, donde la región del espacio de atributos que se asignó fue a la clase -1 que se muestra en amarillo claro y en algunos casos se observó una pequeña región de color purpura que pertenece a la clase +1. Recordar que se obtuvo que el valor óptimo de cost=0.01, con 15 vectores de soporte, lo que indica que la margen es ancha y muchos vectores de soporte estaran sobre la margen o la violan. Finalmente por medio de las curvas ROC a pesar de que los datos no son completamente separables, el clasificador de soporte se ajusta bien a los datos. 

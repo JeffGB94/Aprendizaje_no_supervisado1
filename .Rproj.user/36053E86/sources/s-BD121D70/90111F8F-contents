@@ -1,0 +1,357 @@
+---
+title: "Tarea 1- Introducción a la Analítica"
+author: |
+  |  Presentado a:
+  |  \LARGE Cesar Augusto Gómez
+  |  \vspace{0.3cm}
+  |  Presentado por: 
+  |  \LARGE Daniela Arbeláez Montoya
+  |  \vspace{0.1cm}
+  |  \LARGE Jefferson Gamboa Betancur
+  |  \vspace{0.3cm}
+date: "26/11/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 2. MSVs - aplicado <a name="msvs---aplicado"></a>
+
+En este ejercicio, se utilizará el enfoque de máquinas de soporte vectorial para predecir si un automóvil determinado posee un alto o bajo consumo de combustible basado en el conjunto de datos $Auto$ (librería ISLR).
+
+
+## a.
+Cree una variable binaria que tome un 1 para automóviles con millaje por galón por encima de la mediana, y un 0 para automóviles con millaje por debajo de la mediana.
+ 
+Se debe tener en cuenta que para poder usar la función **msv()**, se debe codificar la respuesta como una variable factor.
+```{r}
+library(ISLR)
+data(Auto)
+# Variable binaria
+Auto$mpg<-as.factor((Auto$mpg>median(Auto$mpg))*1)
+```
+ 
+## b. 
+Ajuste un **clasificador de soporte vectorial** a los datos con varios valores del parámetro $cost$ para predecir si un automóvil posee millaje alto o bajo. Informe los errores de validación cruzada asociados con diferentes valores de este parámetro. **Comente sobre sus resultados**.
+ 
+ Primero dividimos la base de datos en conjunto de entrenamiento y prueba:
+```{r}
+set.seed(2567)
+muestra<-sample(1:nrow(Auto),size = nrow(Auto)*.7,replace = F)
+#Conjunto de entrenamiento
+train<-Auto[muestra,]
+#Conjunto de Prueba
+test<-Auto[-muestra,]
+```
+ 
+ Ahora usando el clasificador de soporte vectorial, se tiene:
+```{r}
+library(e1071)
+set.seed(2567)
+linear.smv<- tune(svm,mpg~.,data = train,kernel="linear",ranges = list(cost=c(0.001,0.01,0.1,1,5,10,100)))
+summary(linear.smv)
+```
+
+Donde se observa que **cost=0.01** proporciona el menor error de validación cruzada.
+```{r}
+lin_bm<-linear.smv$best.model
+summary(lin_bm)
+
+```
+ 
+  En este caso el kernel lineal ha sido utilizado con cost=0.01, y se obtuvieron 131 vectores de soporte, 66 en una clase y 65 en la otra.
+
+ La matriz de confusión para el clasificador por SVM con kernel lineal es:
+```{r}
+table(Predi<-predict(lin_bm,test),Real<-test$mpg)
+```
+ 
+ Asi con el valor asignado a **cost**, 108 de las observaciones se han clasificado de forma correcta.
+
+
+## c.
+Ahora repita b), esta vez utilizando una máquina de soporte vectorial (svm) con una base de kernels radiales y polinomiales, con diferentes valores de los hiperparámetros cost, gamma o degree según el kernel y comente sus resultados.
+  
+  Corriendo una MSV con núcleo radial,se tiene:
+```{r}
+set.seed(2567)
+rad_tune<-tune(svm,mpg~.,data=train,kernel="radial",ranges =list(cost=c(0.1 ,1 ,10 ,100 ,1000),                                                     gamma=c(0.5,1,2,3,4)))
+summary(rad_tune)
+```
+
+Por lo tanto, la mejor elección de parámetros parece ser cost = 1 y $\gamma=1$.
+```{r}
+rad_bm<-rad_tune$best.model
+summary(rad_bm)
+```
+  
+  En este caso el kernel radial ha sido utilizado con cost=1,$\gamma=1$, y se obtuvieron 265 vectores de soporte, 129 en una clase y 136 en la otra.
+  
+  La matriz de confusión para el clasificador por SVM con kernel radial es:
+```{r}
+table(pred<-predict(rad_bm,test),Real<-test$mpg)
+```
+  
+  Aproximadamente, $92\%$ de las observaciones han sido clasificadas correctamente por esta MSV.
+  
+  Similarmente, se corre un clasificador de soporte vectorial  con núcleo polinomial:
+```{r}
+set.seed(2567)
+pol_tune<-tune(svm,mpg~.,data = train,kernel="polynomial",ranges = list(cost=c(0.01,0.1,1,10,100),
+              gamma=c(0.2,0.5,1,2,3),
+              degree=c(1,2,3,4,5)))
+summary(pol_tune)
+```
+  
+Por lo que parece ser que la mejor elección de parámetros es cost=0.1, $\gamma=0.2$ y degree=3.Entonces el mejor modelo para MSV con kernel polinomial es:
+```{r}
+poly_bm <- pol_tune$best.model
+summary(poly_bm)
+```
+
+Para este modelo, se obtuvieron 139 vectores de soporte, 68 en una clase y 71 en la otra.
+
+La matriz de confusión para el clasificador por $SVM$ con kernel polinomial es:
+```{r}
+table(Pred = predict(poly_bm, test) , Real = test$mpg)
+```
+
+Aproximadamente $8\%$ de las observaciones fueron clasificadas incorrectamente.
+
+## d.
+Realice algunos plots que sirvan de apoyo a sus afirmaciones en $(b)$ y $(c)$. **Recomendación:** En el lab, se utilizó la función $plot()$ para objetos "svm" solo en casos con $p = 2$. Cuando $p > 2$, se puede utilizar la función $plot()$ para crear gráficos que muestran pares de variables a la vez. Esencialmente, en lugar de escribir $plot(svmfit,dat)$ donde svmfit contiene el modelo ajustado y dat es un data frame que contiene los datos, se puede utilizar $plot(svmfit,dat,x1 \sim x4)$ para graficar solo las variables primera y cuarta. Sin embargo, se debe reemplazar $x1$ y $x4$ con los nombres correctos de las variables. Se puede encontrar más información, escribiendo ?plot.svm.
+```{r}
+plot(lin_bm, test, acceleration ~ horsepower)
+```
+```{r}
+plot(rad_bm,test,acceleration~horsepower)
+```
+```{r}
+plot(poly_bm,test,acceleration~horsepower)
+```
+
+# 3.
+Este ejercicio utiliza el conjunto de datos **OJ** el cual es parte de la librería ISLR.
+
+## a.
+Cree un conjunto de entrenamiento con una muestra aletoria de 800 observaciones y un conjunto de prueba que conste del resto de observaciones.
+```{r}
+library(ISLR)
+datos<-OJ
+set.seed(2567)
+muestra<-sample(1:nrow(datos),size = nrow(datos)*.7477,replace = F)
+#Conjunto de entrenamiento
+train<-datos[muestra,]
+#Conjunto de Prueba
+test<-datos[-muestra,]
+
+```
+
+## b.
+Ajuste un **clasificador de soporte vectorial** utilizando cost=0.1, con Purchase como la variable respuesta y las demás como predictores.
+
+$\bullet$ Utilice la función $summary()$ para obtener un resumen de estadísticas y describa los resultados obtenidos.
+```{r}
+svmfit<-svm(Purchase~.,data = train,kernel="linear",cost=0.1,scale=F)
+summary(svmfit)
+```
+
+En este caso el kernel lineal ha sido utilizado con cost=0.1, y se obtuvieron 458 vectores de soporte, 229 en cada clase.
+
+## c.
+Qué tasas de error de entrenamiento y de prueba obtiene?.
+
+Ajustando el clasificador de soporte vectorial con cost=0.1, obtenemos la tasa de error de entrenamiento y de prueba respectivamente:
+```{r}
+mct<-table(Pred = predict(svmfit, train) , Real = train$Purchase)
+(train_error<-(mct[1,2]+mct[2,1])/(sum(mct)))
+```
+```{r}
+mcts<-table(Pred = predict(svmfit, test) , Real = test$Purchase)
+(test_error<-(mcts[1,2]+mcts[2,1])/(sum(mcts)))
+```
+
+Según los resultados, la tasa de error de prueba es la más baja.
+
+## d.
+Utilice la función **tune()** para obtener un valor óptimo del parámetro
+cost. Considere valores en el rango de 0.01 a 10.
+```{r}
+set.seed(2567)
+tune.out=tune(svm ,Purchase~.,data=train ,kernel ="linear",ranges =list(cost=c(0.01,0.1,0.5,1,1.5,5,10) ))
+summary(tune.out)
+bestmod = tune.out$best.model
+```
+
+En este caso, se obtuvo que el valor óptimo de cost es 0.01.
+
+## e.
+Calcule nuevamente las tasas de error de entrenamiento y de prueba usando el valor óptimo obtenido de cost.
+```{r}
+mct<-table(Pred = predict(bestmod, train) , Real = train$Purchase)
+(train_error<-(mct[1,2]+mct[2,1])/(sum(mct)))
+```
+```{r}
+mcts<-table(Pred = predict(bestmod, test) , Real = test$Purchase)
+(test_error<-(mcts[1,2]+mcts[2,1])/(sum(mcts)))
+```
+
+Vemos que al pasar cost de 0.1 a 0.01, ambas tasas de error se reducen un poco, y la tasa de error de prueba sigue siendo la más pequeña.
+
+## f.
+Repita items de (b) hasta (e) ajustando esta vez una máquina de soporte vectorial (svm) con un núcleo **radial**. Utilizando el valor de default para $\gamma$.
+
+Cuando buscamos información con la función $?svm$, encontramos que por defecto $\gamma=1/dimension_{datos}=0.00125$, usando la dimension del conjunto de entrenamiento; por lo que ajustamos la MSV con núcleo radial así:
+```{r}
+rad.svm =svm(Purchase~., data=train , kernel ="radial", cost =.1,gamma=0.00125)
+summary(rad.svm)
+```
+
+El kernel lineal ha sido utilizado con cost=0.1,$\gamma=0.00125$ y se obtuvieron 632 vectores de soporte, 317 en una clase y 315 en otra.
+
+Ahora se obtiene la tasa de error de entrenamiento y de prueba, respectivamente:
+```{r}
+mct<-table(Pred = predict(rad.svm, train) , Real = train$Purchase)
+(train_error<-(mct[1,2]+mct[2,1])/(sum(mct)))
+```
+```{r}
+mcts<-table(Pred = predict(rad.svm, test) , Real = test$Purchase)
+(test_error<-(mcts[1,2]+mcts[2,1])/(sum(mcts)))
+```
+
+Hallamos con ayuda de la función $tune()$ el valor óptimo de cost en un rango de 0.01 a 10.
+```{r}
+tune.out=tune(svm , Purchase~., data=train, kernel = "radial",
+ranges =list(cost=c(0.01,0.1 ,1,1.5,5 ,10),gamma=0.00125 ))
+summary(tune.out)
+bm = tune.out$best.model
+```
+
+Se observa que cost=10 proporciona el menor error de validación cruzada.
+
+Hallamos nuevamente la tasa de error de entrenamiento y de prueba, respectivamente:
+```{r}
+mct<-table(Pred = predict(bm, train) , Real = train$Purchase)
+(train_error<-(mct[1,2]+mct[2,1])/(sum(mct)))
+```
+```{r}
+mcts<-table(Pred = predict(bm, test) , Real = test$Purchase)
+(test_error<-(mcts[1,2]+mcts[2,1])/(sum(mcts)))
+```
+
+## g.
+Repita items (b) hasta (e) utilizando nuevamente una máquina de soporte vectorial pero esta vez con un nucleo polinomial, usando degree=2.
+```{r}
+polymsv<-svm(Purchase~.,data = train,kernel="polynomial",cost=.1,gamma=.00125,degree=2)
+summary(polymsv)
+```
+
+El kernel polinomial ha sido utilizado con cost=0.1,$\gamma=0.00125$,degree=2 y se obtuvieron 630 vectores de soporte, 315 en cada clase.
+ 
+ La tasa de error de entrenamiento y prueba son respectivamente:
+```{r}
+mct<-table(Pred = predict(polymsv, train) , Real = train$Purchase)
+(train_error<-(mct[1,2]+mct[2,1])/(sum(mct)))
+```
+```{r}
+mcts<-table(Pred = predict(polymsv, test) , Real = test$Purchase)
+(test_error<-(mcts[1,2]+mcts[2,1])/(sum(mcts)))
+``` 
+
+Ahora, en un rango de 0.01 a 10 encontramos un valor óptimo para cost.
+```{r}
+set.seed(2567)
+tunout=tune(svm , Purchase~., data=train, kernel = "polynomial",
+ranges =list(cost=c(0.01,0.1 ,1,1.5,5 ,10),gamma=0.00125,degree=2 ))
+summary(tunout)
+bmpoly = tunout$best.model
+```
+
+Se observa que en el rango evaluado, el error es igual para cualquier valor de $cost$.
+```{r, echo=FALSE}
+mct<-table(Pred = predict(bmpoly, train) , Real = train$Purchase)
+(train_error<-(mct[1,2]+mct[2,1])/(sum(mct)))
+```
+```{r}
+mcts<-table(Pred = predict(bmpoly, test) , Real = test$Purchase)
+(test_error<-(mcts[1,2]+mcts[2,1])/(sum(mcts)))
+``` 
+
+## h.
+En general cúal método parece proporcionar los mejores resultados en estos datos?
+
+El modelo para MSV con kernel radial usando cost=10 y $\gamma=0.00125$, parece proporcionar los mejores resultados para esta base de datos, ya que con éste se obtienen ambas tasas de error más bajas respecto a los demás modelos.
+
+# 4. PCA - K-medias <a name="pca---k-medias"></a>
+En este ejercicio usted va a generar un conjunto simulado de datos y entonces aplicará PCA y agrupamiento por k-medias sobre dichos datos.
+
+## a.
+Genere un conjunto de datos simulados con 20 observaciones en cada una de tres clases (es decir, 60 observaciones en total) y 50 variables.
+**Sugerencia:** hay una serie de funciones en R que puede utilizar para generar datos. Un ejemplo es la función $rnorm()$; $runif()$ es otra opción.
+Asegúrese de agregar un cambio en la media en las observaciones de cada clase a fin de obtener tres clases distintas.
+
+## b.
+Realice PCA en las 60 observaciones y grafique las observaciones en t´erminos de las 2 primeras variables principales Z1 y Z2. Use un color diferente para indicar las observaciones en cada una de las tres clases. Si las tres clases aparecen separados en esta gráfica, solo entonces continúe con la parte (c). Si no, vuelva al inciso a) y modifique la simulación para que haya una mayor separación entre las tres clases. No continúe con la parte (c) hasta que las tres clases muestren al menos algún grado de separación en los dos primeros vectores de scores de componentes principales.
+
+## c.
+Desarrolle agrupación de K-medias de las observaciones con K = 3. ¿Qué tan bien funcionan los clusteres que obtuvo con el algoritmo de K-medias comparado con las verdaderas etiquetas de clase?
+**Sugerencia:** puede usar la función table() en R para comparar las verdaderas etiquetas de clase con las etiquetas de clase obtenidas por agrupamiento. Tener cuidado cómo se interpretan los resultados: el agrupamiento de K-medias numera los grupos arbitrariamente, por lo que no puede simplemente comprobar si las verdaderas etiquetas de clase y las etiquetas de agrupación son las mismas.
+
+## d.
+ Realice agrupamiento de K-medias con K = 2. Describa sus resultados.
+ 
+## e.
+  Ahora realice agrupamiento de K-medias con K = 4 y describa su resultados.
+  
+## f.
+Ahora realice agrupamiento de K-medias con K=3 en los dos primeros vectores de scores de componentes principales, en lugar de los datos en las variables originales. Es decir, realice la agrupación de K-medias en la matriz de $60*2$, cuya primera columna es la coordenada $z_{i1}$ en la primera
+componente principal $Z_1$ y la segunda columna es la coordenada $z_{i2}$ en la segunda componente principal $Z_2$. Comente los resultados.
+
+## g.
+Con la función $scale()$, realice agrupamiento de K-medias con K=3 en los datos después de escalar cada variable para tener una desviación estándar de uno. ¿Cómo se comparan estos resultados con los obtenidos? en (b)? Explique.
+
+# 5.
+Considere el conjunto de datos **USArrests**. En este ejercicio se agruparán los estados en USArrests con agrupamiento jerarquico.
+```{r}
+datos<-USArrests
+```
+
+
+## a.
+Utilice agrupación jerárquica con enlace completo y distancia euclidiana, para agrupar los estados.
+
+Comenzamos por la agrupación de las observaciones utilizando un enlace completo, pero primero escalamos las variables
+```{r}
+a.jer =hclust(dist(datos), method ="complete")
+plot(a.jer ,main =" Complete Linkage ", xlab="", sub ="", cex =.9)
+```
+
+
+## b.
+ Corte el dendrograma a una altura que dé como resultado tres clusters. ¿Qué estados pertenecen a qué cluster?
+ 
+En el dendograma se observa que para obtener 3 cluster, un corte adecuado podría hacerse a una altura de 150. Ahora se muestra a qué cluster pertenece cada estado:
+```{r}
+cutree (a.jer, 3)
+```
+ 
+ 
+## c.
+Agrupe jerárquicamente los estados utilizando un enlace completo y distancia euclidiana, después de escalar las variables para tener una desviación
+estándar uno.
+```{r}
+x=scale(datos)
+plot(hclust(dist(x), method ="complete"), main ="Hierarchical Clustering with Scaled Features",xlab="", sub ="",cex =.9)
+cutree(hclust(dist(x), method ="complete"),3)
+```
+
+
+## d.
+ ¿Qué efecto tiene el escalado de las variables en la estructura jerárquica del agrupamiento obtenido? En su opinión, ¿deberían las variables ser escaladas antes de que se calculen las disimilitudes entre observaciones?
+Proporcione una justificación para su respuesta.
+
+
+
+

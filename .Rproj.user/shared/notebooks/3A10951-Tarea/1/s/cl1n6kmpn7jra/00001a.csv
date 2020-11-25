@@ -1,0 +1,1 @@
+"0","MSE3 <- mean((test$Sales - predict(bas.Reg, newdata = test))^2)"

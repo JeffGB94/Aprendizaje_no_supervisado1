@@ -1,0 +1,5 @@
+"0","set.seed(123)"
+"0","cv_Reg <- cv.tree(Reg.tree)"
+"0","D.prueba <- data.frame(cv_Reg$size, cv_Reg$dev)"
+"0","D.prueba <- D.prueba[which.min(D.prueba[,2]),]"
+"0","plot(cv_Reg$size, cv_Reg$dev, type = ""b"", xlab = ""Tree seze"", ylab = ""MSE de validación cruzada"")"

@@ -1,0 +1,1 @@
+"0","MSE1 <- mean((test$Sales - predict(Reg.tree, newdata = test))^2)"

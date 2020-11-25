@@ -1,0 +1,2 @@
+"0","prune.Reg <- prune.tree(Reg.tree, best = 8)"
+"0","plot(prune.Reg)"

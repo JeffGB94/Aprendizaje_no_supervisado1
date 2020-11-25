@@ -1,0 +1,5 @@
+"0","MSE2 <- mean((test$Sales - predict(prune.Reg, newdata = test))^2); MSE2"
+"1","[1]"
+"1"," 4.353022"
+"1","
+"
