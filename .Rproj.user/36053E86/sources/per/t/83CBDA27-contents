@@ -230,6 +230,43 @@ Se observa que a pesar de utilizar con bagging un m = 10 y para random forest un
 ## 3.h)
 
 ## 4.a)
+```{r}
+#Clase 1, normal, media -10, desviación 2
+C1 <- data.frame()
+set.seed(123)
+datos1 <- rnorm(1000, mean = -10, sd = 2)
+
+for (i in 1:50) {
+  set.seed(i)
+  C1[1:20,i] <- sample(datos1, size = 20)
+}
+C1[1:20,51] <- rep("C1", 20)
+
+#Clase 2, uniforme, minimo 10, máximo 20
+C2 <- data.frame()
+set.seed(123)
+datos2 <- runif(1000, min = 10, max = 20)
+
+for (i in 1:50) {
+  set.seed(i)
+  C2[1:20,i] <- sample(datos2, size = 20)
+}
+C2[1:20,51] <- rep("C2", 20)
+
+#Clase 3, t-student con 2 grado de libertad
+C3 <- data.frame()
+set.seed(123)
+datos3 <- rt(1000, 2)
+
+for (i in 1:50) {
+  set.seed(i)
+  C3[1:20,i] <- sample(datos3, size = 20)
+}
+C3[1:20,51] <- rep("C3", 20)
+
+C <- data.frame()
+C[1:20,1:51] <- C1; C[21:40,1:51] <- C2; C[41:60,1:51] <- C3
+```
 
 ## 4.b)
 

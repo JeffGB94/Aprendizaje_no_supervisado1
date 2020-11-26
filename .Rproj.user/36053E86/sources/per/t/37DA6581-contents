@@ -62,3 +62,56 @@ MSE4 <- mean((test$Sales - predict(rf.Reg, newdata = test))^2)
 importance(rf.Reg)
 varImpPlot(rf.Reg)
 
+## 2.a)
+library(ISLR)
+data(Auto)
+# Variable binaria
+Auto$mpg<-as.factor((Auto$mpg>median(Auto$mpg))*1)
+
+## 2.b)
+set.seed(2567)
+muestra<-sample(1:nrow(Auto),size = nrow(Auto)*.7,replace = F)
+#Conjunto de entrenamiento
+train<-Auto[muestra,]
+#Conjunto de Prueba
+test<-Auto[-muestra,]
+
+library(e1071)
+set.seed(2567)
+linear.smv<- tune(svm,mpg~.,data = train,kernel="linear",ranges = list(cost=c(0.001,0.01,0.1,1,5,10,100)))
+summary(linear.smv)
+
+lin_bm<-linear.smv$best.model
+summary(lin_bm)
+
+table(Predi<-predict(lin_bm,test),Real<-test$mpg)
+
+##2.c)
+set.seed(2567)
+rad_tune<-tune(svm,mpg~.,data=train,kernel="radial",ranges =list(cost=c(0.1 ,1 ,10 ,100 ,1000),                                                     gamma=c(0.5,1,2,3,4)))
+summary(rad_tune)
+
+rad_bm<-rad_tune$best.model
+summary(rad_bm)
+
+table(pred<-predict(rad_bm,test),Real<-test$mpg)
+
+set.seed(2567)
+pol_tune<-tune(svm,mpg~.,data = train,kernel="polynomial",ranges = list(cost=c(0.01,0.1,1,10,100),
+                                                                        gamma=c(0.2,0.5,1,2,3),
+                                                                        degree=c(1,2,3,4,5)))
+summary(pol_tune)
+
+poly_bm <- pol_tune$best.model
+summary(poly_bm)
+
+table(Pred = predict(poly_bm, test) , Real = test$mpg)
+
+plot(lin_bm, test, acceleration ~ horsepower)
+
+plot(rad_bm,test,acceleration~horsepower)
+
+plot(poly_bm,test,acceleration~horsepower)
+
+## 3.a)
+
